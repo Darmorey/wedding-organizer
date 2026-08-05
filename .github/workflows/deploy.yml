@@ -1,4 +1,4 @@
-# GitHub Pages deploy — активируется после scaffold приложения (npm run build)
+# GitHub Pages deploy — запускается только когда есть package.json (после scaffold приложения)
 # Settings → Pages → Source: GitHub Actions
 
 name: Deploy to GitHub Pages
@@ -19,6 +19,8 @@ concurrency:
 
 jobs:
   build:
+    # Пропуск, пока нет npm-проекта — иначе падает из-за отсутствия lock-файла
+    if: hashFiles('package.json') != ''
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -29,10 +31,8 @@ jobs:
           cache: npm
 
       - run: npm ci
-        continue-on-error: true
 
       - run: npm run build
-        continue-on-error: true
         env:
           VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
           VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
@@ -41,10 +41,10 @@ jobs:
       - uses: actions/upload-pages-artifact@v3
         with:
           path: dist
-        continue-on-error: true
 
   deploy:
     needs: build
+    if: hashFiles('package.json') != ''
     runs-on: ubuntu-latest
     environment:
       name: github-pages
@@ -52,4 +52,3 @@ jobs:
     steps:
       - id: deployment
         uses: actions/deploy-pages@v4
-        continue-on-error: true
