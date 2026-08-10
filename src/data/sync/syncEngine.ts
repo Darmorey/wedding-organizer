@@ -2,39 +2,53 @@ import { supabase } from '../supabase/client'
 import {
   mapCategoryFromRow,
   mapCategoryToRow,
+  mapGuestFromRow,
+  mapGuestToRow,
   mapTaskFromRow,
   mapTaskToRow,
   type CategoryRow,
+  type GuestRow,
   type TaskRow,
 } from '../supabase/mappers'
+import type { SyncTable } from '../../core/types/entity'
 import { db } from '../db/database'
 import { mergeRecords } from './merge'
 
 export async function pullProjectData(projectId: string): Promise<void> {
-  const [categoriesResult, tasksResult] = await Promise.all([
+  const [categoriesResult, tasksResult, guestsResult] = await Promise.all([
     supabase.from('categories').select('*').eq('project_id', projectId),
     supabase.from('tasks').select('*').eq('project_id', projectId),
+    supabase.from('guests').select('*').eq('project_id', projectId),
   ])
 
   if (categoriesResult.error) throw categoriesResult.error
   if (tasksResult.error) throw tasksResult.error
+  if (guestsResult.error) throw guestsResult.error
 
   const remoteCategories = (categoriesResult.data as CategoryRow[]).map(mapCategoryFromRow)
   const remoteTasks = (tasksResult.data as TaskRow[]).map(mapTaskFromRow)
+  const remoteGuests = (guestsResult.data as GuestRow[]).map(mapGuestFromRow)
 
   const localCategories = await db.categories.where('projectId').equals(projectId).toArray()
   const localTasks = await db.tasks.where('projectId').equals(projectId).toArray()
+  const localGuests = await db.guests.where('projectId').equals(projectId).toArray()
 
   const mergedCategories = mergeRecords(localCategories, remoteCategories)
   const mergedTasks = mergeRecords(localTasks, remoteTasks)
+  const mergedGuests = mergeRecords(localGuests, remoteGuests)
 
-  await db.transaction('rw', db.categories, db.tasks, async () => {
+  await db.transaction('rw', db.categories, db.tasks, db.guests, async () => {
     await db.categories.bulkPut(mergedCategories)
     await db.tasks.bulkPut(mergedTasks)
+    await db.guests.bulkPut(mergedGuests)
   })
 }
 
-export async function pushQueueItem(projectId: string, entityId: string, tableName: 'categories' | 'tasks') {
+export async function pushQueueItem(
+  projectId: string,
+  entityId: string,
+  tableName: SyncTable,
+): Promise<void> {
   if (tableName === 'categories') {
     const category = await db.categories.get(entityId)
     if (!category || category.projectId !== projectId) return
@@ -44,10 +58,19 @@ export async function pushQueueItem(projectId: string, entityId: string, tableNa
     return
   }
 
-  const task = await db.tasks.get(entityId)
-  if (!task || task.projectId !== projectId) return
+  if (tableName === 'tasks') {
+    const task = await db.tasks.get(entityId)
+    if (!task || task.projectId !== projectId) return
 
-  const { error } = await supabase.from('tasks').upsert(mapTaskToRow(task))
+    const { error } = await supabase.from('tasks').upsert(mapTaskToRow(task))
+    if (error) throw error
+    return
+  }
+
+  const guest = await db.guests.get(entityId)
+  if (!guest || guest.projectId !== projectId) return
+
+  const { error } = await supabase.from('guests').upsert(mapGuestToRow(guest))
   if (error) throw error
 }
 

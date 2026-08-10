@@ -1,6 +1,13 @@
 import type { RealtimeChannel } from '@supabase/supabase-js'
 import { supabase } from '../supabase/client'
-import { mapCategoryFromRow, mapTaskFromRow, type CategoryRow, type TaskRow } from '../supabase/mappers'
+import {
+  mapCategoryFromRow,
+  mapGuestFromRow,
+  mapTaskFromRow,
+  type CategoryRow,
+  type GuestRow,
+  type TaskRow,
+} from '../supabase/mappers'
 import { db } from '../db/database'
 import { mergeEntity } from '../repositories/baseRepository'
 
@@ -36,6 +43,21 @@ export function subscribeToProject(
           const remote = mapTaskFromRow(payload.new as TaskRow)
           const local = await db.tasks.get(remote.id)
           await db.tasks.put(mergeEntity(local, remote))
+        }
+        onChange()
+      },
+    )
+    .on(
+      'postgres_changes',
+      { event: '*', schema: 'public', table: 'guests', filter: `project_id=eq.${projectId}` },
+      async (payload) => {
+        if (payload.eventType === 'DELETE') {
+          const id = (payload.old as { id?: string }).id
+          if (id) await db.guests.delete(id)
+        } else {
+          const remote = mapGuestFromRow(payload.new as GuestRow)
+          const local = await db.guests.get(remote.id)
+          await db.guests.put(mergeEntity(local, remote))
         }
         onChange()
       },

@@ -6,6 +6,7 @@ import { ProgressBar } from '../../core/ui/ProgressBar'
 import { Button } from '../../core/ui/Button'
 import { db } from '../../data/db/database'
 import { categoryRepository } from '../../data/repositories/categoryRepository'
+import { guestRepository } from '../../data/repositories/guestRepository'
 
 export function HomePage() {
   const { user, activeProject, projects, setActiveProjectId, signOut } = useAuth()
@@ -23,6 +24,11 @@ export function HomePage() {
   const categories = useLiveQuery(async () => {
     if (!activeProject?.id) return []
     return categoryRepository.listByProject(activeProject.id)
+  }, [activeProject?.id])
+
+  const guestStats = useLiveQuery(async () => {
+    if (!activeProject?.id) return { total: 0, yes: 0, no: 0, pending: 0 }
+    return guestRepository.getStats(activeProject.id)
   }, [activeProject?.id])
 
   const percent =
@@ -45,6 +51,16 @@ export function HomePage() {
           {stats?.done ?? 0} из {stats?.total ?? 0} задач выполнено
         </p>
         <ProgressBar value={percent} />
+      </Card>
+
+      <Card title="Гости" subtitle="RSVP">
+        <p className="mb-3 text-sm text-muted">
+          {guestStats?.total ?? 0} всего · {guestStats?.yes ?? 0} придут ·{' '}
+          {guestStats?.no ?? 0} не придут · {guestStats?.pending ?? 0} ждут ответ
+        </p>
+        <Link to="/guests" className="text-sm font-medium text-accent-dark hover:text-accent">
+          Открыть список →
+        </Link>
       </Card>
 
       {activeProject ? (

@@ -42,7 +42,15 @@ export interface Task extends BaseEntity {
   sortOrder: number
 }
 
-export type SyncTable = 'categories' | 'tasks'
+export interface Guest extends BaseEntity {
+  name: string
+  guestGroup: string
+  rsvp: RsvpStatus
+  plusOne: boolean
+  notes: string
+}
+
+export type SyncTable = 'categories' | 'tasks' | 'guests'
 
 export type SyncOperation = 'upsert' | 'delete'
 

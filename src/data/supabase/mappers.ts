@@ -1,4 +1,4 @@
-import type { Category, Task } from '../../core/types/entity'
+import type { Category, Guest, Task } from '../../core/types/entity'
 
 export interface CategoryRow {
   id: string
@@ -80,5 +80,51 @@ export function mapTaskToRow(task: Task): TaskRow {
     created_at: task.createdAt,
     updated_at: task.updatedAt,
     deleted_at: task.deletedAt ?? null,
+  }
+}
+
+export interface GuestRow {
+  id: string
+  project_id: string
+  name: string
+  guest_group: string
+  rsvp: 'pending' | 'yes' | 'no'
+  plus_one: boolean
+  notes: string
+  metadata: Record<string, unknown>
+  created_at: string
+  updated_at: string
+  deleted_at: string | null
+}
+
+export function mapGuestFromRow(row: GuestRow): Guest {
+  return {
+    id: row.id,
+    projectId: row.project_id,
+    name: row.name,
+    guestGroup: row.guest_group,
+    rsvp: row.rsvp,
+    plusOne: row.plus_one,
+    notes: row.notes,
+    metadata: row.metadata ?? {},
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+    deletedAt: row.deleted_at,
+  }
+}
+
+export function mapGuestToRow(guest: Guest): GuestRow {
+  return {
+    id: guest.id,
+    project_id: guest.projectId,
+    name: guest.name,
+    guest_group: guest.guestGroup,
+    rsvp: guest.rsvp,
+    plus_one: guest.plusOne,
+    notes: guest.notes,
+    metadata: guest.metadata ?? {},
+    created_at: guest.createdAt,
+    updated_at: guest.updatedAt,
+    deleted_at: guest.deletedAt ?? null,
   }
 }

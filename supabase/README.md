@@ -39,5 +39,6 @@ For password reset, the link redirects to `/auth/reset-password`.
 **Database → Replication** — включите replication для таблиц:
 - `categories`
 - `tasks`
+- `guests`
 
 Без этого изменения будут синхронизироваться при входе и по кнопке, но не мгновенно между устройствами.

@@ -8,6 +8,7 @@ import { OnboardingPage } from './features/auth/pages/OnboardingPage'
 import { HomePage } from './features/home/HomePage'
 import { CategoriesPage } from './features/categories/pages/CategoriesPage'
 import { CategoryDetailPage } from './features/categories/pages/CategoryDetailPage'
+import { GuestsPage } from './features/guests/pages/GuestsPage'
 import { ProtectedRoute, GuestRoute } from './core/routing/ProtectedRoute'
 import { AppShell } from './core/layout/AppShell'
 import { SyncProvider } from './data/sync/SyncProvider'
@@ -25,6 +26,7 @@ function App() {
                 <Route path="/" element={<HomePage />} />
                 <Route path="/categories" element={<CategoriesPage />} />
                 <Route path="/categories/:categoryId" element={<CategoryDetailPage />} />
+                <Route path="/guests" element={<GuestsPage />} />
               </Route>
             </Route>
 

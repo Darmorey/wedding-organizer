@@ -7,4 +7,5 @@ export interface NavItem {
 export const MAIN_NAV: NavItem[] = [
   { path: '/', label: 'Главная', icon: '🏠' },
   { path: '/categories', label: 'Категории', icon: '📋' },
+  { path: '/guests', label: 'Гости', icon: '👥' },
 ]
