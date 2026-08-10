@@ -19,8 +19,6 @@ concurrency:
 
 jobs:
   build:
-    # Пропуск, пока нет npm-проекта — иначе падает из-за отсутствия lock-файла
-    if: hashFiles('package.json') != ''
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -44,7 +42,6 @@ jobs:
 
   deploy:
     needs: build
-    if: hashFiles('package.json') != ''
     runs-on: ubuntu-latest
     environment:
       name: github-pages
