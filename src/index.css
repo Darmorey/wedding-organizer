@@ -1,0 +1,21 @@
+@import 'tailwindcss';
+
+@theme {
+  --color-cream: #faf8f5;
+  --color-cream-dark: #f0ebe3;
+  --color-ink: #3d3a36;
+  --color-muted: #7a756e;
+  --color-accent: #b8957a;
+  --color-accent-dark: #8b6f5c;
+  --font-sans: system-ui, -apple-system, 'Segoe UI', sans-serif;
+}
+
+@layer base {
+  body {
+    @apply min-h-screen bg-cream text-ink antialiased;
+  }
+
+  #root {
+    @apply min-h-screen;
+  }
+}
