@@ -10,7 +10,9 @@ export interface BaseEntity {
 }
 
 export type MemberRole = 'owner' | 'editor'
-export type RsvpStatus = 'pending' | 'yes' | 'no'
+export type BuiltinRsvpStatus = 'pending' | 'yes' | 'no' | 'not_invited'
+/** Встроенные статусы или свой: `custom:…` */
+export type RsvpStatus = BuiltinRsvpStatus | `custom:${string}`
 export type UploadStatus = 'pending' | 'uploaded' | 'failed'
 
 export interface WeddingProject {
@@ -47,6 +49,8 @@ export interface Guest extends BaseEntity {
   guestGroup: string
   rsvp: RsvpStatus
   plusOne: boolean
+  /** Имеет смысл только при plusOne: спутник — ребёнок */
+  plusOneIsChild: boolean
   notes: string
 }
 

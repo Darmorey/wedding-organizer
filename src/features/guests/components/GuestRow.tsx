@@ -1,57 +1,131 @@
 import type { Guest, RsvpStatus } from '../../../core/types/entity'
-import { RSVP_LABELS } from '../../../core/config/guests'
-import { Button } from '../../../core/ui/Button'
+import {
+  GUEST_COMPACT_SELECT_CLASS,
+  RSVP_STATUSES,
+  guestGroupShortLabel,
+  isBuiltinRsvpStatus,
+  rsvpCompactLabel,
+} from '../../../core/config/guests'
+import type { CustomRsvpStatus } from '../../../core/config/guestProjectPrefs'
 
 interface GuestRowProps {
   guest: Guest
+  groupOptions: string[]
+  customRsvpStatuses: CustomRsvpStatus[]
   onRsvpChange: (guestId: string, rsvp: RsvpStatus) => void
+  onGroupChange: (guestId: string, guestGroup: string) => void
+  onCompanionChange: (guestId: string, plusOne: boolean, plusOneIsChild: boolean) => void
   onRemove: (guestId: string) => void
 }
 
-const RSVP_STYLES: Record<RsvpStatus, string> = {
-  pending: 'bg-cream text-muted',
-  yes: 'bg-green-100 text-green-800',
-  no: 'bg-red-100 text-red-700',
-}
+export function GuestRow({
+  guest,
+  groupOptions,
+  customRsvpStatuses,
+  onRsvpChange,
+  onGroupChange,
+  onCompanionChange,
+  onRemove,
+}: GuestRowProps) {
+  const showCompanion = guest.rsvp !== 'not_invited'
+  const groupValue =
+    groupOptions.includes(guest.guestGroup) ? guest.guestGroup : guest.guestGroup || groupOptions[0]
 
-export function GuestRow({ guest, onRsvpChange, onRemove }: GuestRowProps) {
   return (
-    <li className="rounded-xl border border-cream-dark bg-white px-4 py-3">
-      <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0 flex-1">
-          <p className="font-medium text-ink">
-            {guest.name}
-            {guest.plusOne ? (
-              <span className="ml-1.5 text-xs font-normal text-muted">+1</span>
-            ) : null}
-          </p>
-          {guest.guestGroup ? (
-            <p className="mt-0.5 text-sm text-muted">{guest.guestGroup}</p>
+    <li className="flex items-center gap-1.5 border-b border-cream-dark/80 py-2 last:border-b-0">
+      <div className="min-w-0 flex-1">
+        <p className="truncate text-sm font-medium text-ink">
+          {guest.name}
+          {showCompanion && guest.plusOne ? (
+            <span className="ml-1 text-xs font-normal text-muted">
+              +1{guest.plusOneIsChild ? ' 👶' : ''}
+            </span>
           ) : null}
-          {guest.notes ? (
-            <p className="mt-1 text-sm text-muted/80">{guest.notes}</p>
-          ) : null}
-        </div>
-        <Button variant="ghost" className="shrink-0 px-2 py-1 text-xs" onClick={() => onRemove(guest.id)}>
-          Удалить
-        </Button>
+        </p>
+        {guest.notes ? (
+          <p className="truncate text-[11px] text-muted">{guest.notes}</p>
+        ) : null}
       </div>
 
-      <div className="mt-3 flex gap-1.5">
-        {(['pending', 'yes', 'no'] as const).map((rsvp) => (
+      {showCompanion ? (
+        <div className="flex shrink-0 gap-0.5">
           <button
-            key={rsvp}
             type="button"
-            onClick={() => onRsvpChange(guest.id, rsvp)}
+            aria-label="Переключить +1"
+            onClick={() =>
+              onCompanionChange(
+                guest.id,
+                !guest.plusOne,
+                guest.plusOne ? (guest.plusOneIsChild ?? false) : false,
+              )
+            }
             className={[
-              'rounded-lg px-2.5 py-1 text-xs font-medium transition-colors',
-              guest.rsvp === rsvp ? RSVP_STYLES[rsvp] : 'bg-cream/60 text-muted hover:bg-cream',
+              'rounded px-1.5 py-0.5 text-[10px] font-semibold',
+              guest.plusOne ? 'bg-accent-dark text-white' : 'bg-cream text-muted',
             ].join(' ')}
           >
-            {RSVP_LABELS[rsvp]}
+            +1
           </button>
+          {guest.plusOne ? (
+            <button
+              type="button"
+              aria-label="Ребёнок или взрослый +1"
+              onClick={() =>
+                onCompanionChange(guest.id, true, !(guest.plusOneIsChild ?? false))
+              }
+              className={[
+                'rounded px-1 py-0.5 text-[10px]',
+                guest.plusOneIsChild ? 'bg-amber-100' : 'bg-cream text-muted',
+              ].join(' ')}
+            >
+              👶
+            </button>
+          ) : null}
+        </div>
+      ) : null}
+
+      <select
+        className={GUEST_COMPACT_SELECT_CLASS}
+        value={groupValue}
+        title={groupValue}
+        onChange={(e) => onGroupChange(guest.id, e.target.value)}
+      >
+        {groupOptions.map((group) => (
+          <option key={group} value={group}>
+            {guestGroupShortLabel(group)}
+          </option>
         ))}
-      </div>
+      </select>
+
+      <select
+        className={GUEST_COMPACT_SELECT_CLASS}
+        value={guest.rsvp}
+        title={rsvpCompactLabel(guest.rsvp, customRsvpStatuses)}
+        onChange={(e) => onRsvpChange(guest.id, e.target.value as RsvpStatus)}
+      >
+        {RSVP_STATUSES.map((rsvp) => (
+          <option key={rsvp} value={rsvp}>
+            {rsvpCompactLabel(rsvp, customRsvpStatuses)}
+          </option>
+        ))}
+        {customRsvpStatuses.map((status) => (
+          <option key={status.id} value={status.id}>
+            {rsvpCompactLabel(status.id, customRsvpStatuses)}
+          </option>
+        ))}
+        {!isBuiltinRsvpStatus(guest.rsvp) && !customRsvpStatuses.some((s) => s.id === guest.rsvp) ? (
+          <option value={guest.rsvp}>{rsvpCompactLabel(guest.rsvp, customRsvpStatuses)}</option>
+        ) : null}
+      </select>
+
+      <button
+        type="button"
+        aria-label="Удалить"
+        onClick={() => onRemove(guest.id)}
+        className="shrink-0 rounded-lg px-1.5 py-1 text-sm text-muted hover:bg-red-50 hover:text-red-600"
+      >
+        ×
+      </button>
     </li>
   )
 }

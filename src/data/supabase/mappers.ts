@@ -88,8 +88,9 @@ export interface GuestRow {
   project_id: string
   name: string
   guest_group: string
-  rsvp: 'pending' | 'yes' | 'no'
+  rsvp: string
   plus_one: boolean
+  plus_one_is_child: boolean
   notes: string
   metadata: Record<string, unknown>
   created_at: string
@@ -103,8 +104,9 @@ export function mapGuestFromRow(row: GuestRow): Guest {
     projectId: row.project_id,
     name: row.name,
     guestGroup: row.guest_group,
-    rsvp: row.rsvp,
+    rsvp: row.rsvp as Guest['rsvp'],
     plusOne: row.plus_one,
+    plusOneIsChild: row.plus_one_is_child ?? false,
     notes: row.notes,
     metadata: row.metadata ?? {},
     createdAt: row.created_at,
@@ -121,6 +123,7 @@ export function mapGuestToRow(guest: Guest): GuestRow {
     guest_group: guest.guestGroup,
     rsvp: guest.rsvp,
     plus_one: guest.plusOne,
+    plus_one_is_child: guest.plusOneIsChild,
     notes: guest.notes,
     metadata: guest.metadata ?? {},
     created_at: guest.createdAt,

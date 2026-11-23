@@ -27,7 +27,7 @@ export function HomePage() {
   }, [activeProject?.id])
 
   const guestStats = useLiveQuery(async () => {
-    if (!activeProject?.id) return { total: 0, yes: 0, no: 0, pending: 0 }
+    if (!activeProject?.id) return null
     return guestRepository.getStats(activeProject.id)
   }, [activeProject?.id])
 
@@ -54,9 +54,12 @@ export function HomePage() {
       </Card>
 
       <Card title="Гости" subtitle="RSVP">
-        <p className="mb-3 text-sm text-muted">
-          {guestStats?.total ?? 0} всего · {guestStats?.yes ?? 0} придут ·{' '}
-          {guestStats?.no ?? 0} не придут · {guestStats?.pending ?? 0} ждут ответ
+        <p className="mb-2 text-sm text-muted">
+          Подтвердили: <span className="font-medium text-ink">{guestStats?.attendingPeople ?? 0}</span>{' '}
+          чел. ({guestStats?.attendingAdults ?? 0} взр., {guestStats?.attendingChildren ?? 0} дет.)
+        </p>
+        <p className="mb-3 text-xs text-muted">
+          Ожидаем {guestStats?.expectedPeople ?? 0} · в списке {guestStats?.invited ?? 0} записей
         </p>
         <Link to="/guests" className="text-sm font-medium text-accent-dark hover:text-accent">
           Открыть список →

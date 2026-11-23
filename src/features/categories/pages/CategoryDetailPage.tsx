@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from 'react'
+import { useRef, useState, type KeyboardEvent } from 'react'
 import { Link, Navigate, useParams } from 'react-router-dom'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { useAuth } from '../../auth/AuthProvider'
@@ -6,14 +6,15 @@ import { categoryRepository } from '../../../data/repositories/categoryRepositor
 import { taskRepository } from '../../../data/repositories/taskRepository'
 import { TaskChecklist } from '../components/TaskChecklist'
 import { Button } from '../../../core/ui/Button'
-import { Input } from '../../../core/ui/Input'
 import { ProgressBar } from '../../../core/ui/ProgressBar'
 
 export function CategoryDetailPage() {
   const { categoryId = '' } = useParams()
   const { activeProjectId } = useAuth()
-  const [taskTitle, setTaskTitle] = useState('')
   const [submitting, setSubmitting] = useState(false)
+  const [adding, setAdding] = useState(false)
+  const [taskTitle, setTaskTitle] = useState('')
+  const addInputRef = useRef<HTMLInputElement>(null)
 
   const category = useLiveQuery(async () => {
     if (!activeProjectId || !categoryId) return undefined
@@ -41,17 +42,36 @@ export function CategoryDetailPage() {
   const total = tasks?.length ?? 0
   const percent = total === 0 ? 0 : Math.round((done / total) * 100)
 
-  async function handleAddTask(e: FormEvent) {
-    e.preventDefault()
-    if (!activeProjectId || !taskTitle.trim()) return
+  function openAdd() {
+    setAdding(true)
+    setTaskTitle('')
+    requestAnimationFrame(() => addInputRef.current?.focus())
+  }
+
+  function cancelAdd() {
+    setAdding(false)
+    setTaskTitle('')
+  }
+
+  async function submitAdd() {
+    if (!activeProjectId || submitting || !taskTitle.trim()) return
 
     setSubmitting(true)
     try {
-      await taskRepository.create(activeProjectId, categoryId, taskTitle)
+      await taskRepository.create(activeProjectId, categoryId, taskTitle.trim())
       setTaskTitle('')
+      requestAnimationFrame(() => addInputRef.current?.focus())
     } finally {
       setSubmitting(false)
     }
+  }
+
+  function handleAddKeyDown(event: KeyboardEvent<HTMLInputElement>) {
+    if (event.key === 'Enter') {
+      event.preventDefault()
+      void submitAdd()
+    }
+    if (event.key === 'Escape') cancelAdd()
   }
 
   return (
@@ -72,31 +92,68 @@ export function CategoryDetailPage() {
         </div>
       </div>
 
-      <TaskChecklist
-        tasks={tasks ?? []}
-        onToggle={(taskId) => {
-          taskRepository.toggleDone(activeProjectId, taskId).catch(console.error)
-        }}
-        onRemove={(taskId) => {
-          taskRepository.remove(activeProjectId, taskId).catch(console.error)
-        }}
-      />
-
-      <form onSubmit={handleAddTask} className="flex gap-2">
-        <Input
-          label="Новая задача"
-          name="taskTitle"
-          placeholder="Что нужно сделать?"
-          value={taskTitle}
-          onChange={(e) => setTaskTitle(e.target.value)}
-          className="flex-1"
-        />
-        <div className="self-end">
-          <Button type="submit" disabled={submitting || !taskTitle.trim()}>
-            Добавить
-          </Button>
+      <div>
+        <div className="mb-2 flex items-center justify-end gap-2">
+          {adding ? (
+            <>
+              <input
+                ref={addInputRef}
+                type="text"
+                value={taskTitle}
+                onChange={(e) => setTaskTitle(e.target.value)}
+                onKeyDown={handleAddKeyDown}
+                placeholder="Что нужно сделать?"
+                autoComplete="off"
+                disabled={submitting}
+                className="min-w-0 flex-1 rounded-xl border border-cream-dark bg-white px-3 py-2.5 text-sm text-ink placeholder:text-muted focus:border-accent focus:outline-none focus:ring-2 focus:ring-accent/20"
+              />
+              <Button
+                type="button"
+                disabled={submitting || !taskTitle.trim()}
+                className="shrink-0 px-4"
+                aria-label="Добавить подзадачу"
+                onClick={() => void submitAdd()}
+              >
+                {submitting ? '…' : '+'}
+              </Button>
+              <button
+                type="button"
+                aria-label="Отмена"
+                disabled={submitting}
+                onClick={cancelAdd}
+                className="shrink-0 rounded-lg px-2 py-1 text-lg text-muted hover:bg-cream"
+              >
+                ×
+              </button>
+            </>
+          ) : (
+            <Button
+              type="button"
+              disabled={submitting}
+              className="shrink-0 px-4"
+              aria-label="Добавить подзадачу"
+              onClick={openAdd}
+            >
+              +
+            </Button>
+          )}
         </div>
-      </form>
+        <TaskChecklist
+          tasks={tasks ?? []}
+          onToggle={(taskId) => {
+            taskRepository.toggleDone(activeProjectId, taskId).catch(console.error)
+          }}
+          onRemove={(taskId) => {
+            taskRepository.remove(activeProjectId, taskId).catch(console.error)
+          }}
+          onRename={(taskId, title) => {
+            taskRepository.updateTitle(activeProjectId, taskId, title).catch(console.error)
+          }}
+          onReorder={(orderedIds) => {
+            taskRepository.reorder(activeProjectId, categoryId, orderedIds).catch(console.error)
+          }}
+        />
+      </div>
     </div>
   )
 }

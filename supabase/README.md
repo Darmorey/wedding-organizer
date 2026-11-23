@@ -34,7 +34,15 @@ For password reset, the link redirects to `/auth/reset-password`.
 
 Если в консоли браузера: `permission denied for table wedding_projects` — выполни **`migrations/002_grants.sql`** в SQL Editor.
 
-## 6. Realtime (для синхронизации между партнёрами)
+## 6. Статус «Письмо-отказ» у гостей
+
+Если sync гостей падает на значении `not_invited` — выполни **`migrations/003_guests_not_invited.sql`** в SQL Editor.
+
+## 7. +1 ребёнок у гостей
+
+Если sync падает на поле спутника — выполни **`migrations/004_guests_plus_one_child.sql`** в SQL Editor.
+
+## 8. Realtime (для синхронизации между партнёрами)
 
 **Database → Replication** — включите replication для таблиц:
 - `categories`

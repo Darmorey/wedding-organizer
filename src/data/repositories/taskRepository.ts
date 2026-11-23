@@ -38,6 +38,27 @@ export const taskRepository = {
     return task
   },
 
+  async updateTitle(projectId: string, taskId: string, title: string): Promise<Task> {
+    assertProjectId(projectId)
+    const trimmed = title.trim()
+    if (!trimmed) throw new Error('Task title is required')
+
+    const task = await db.tasks.get(taskId)
+    if (!task || task.projectId !== projectId || task.deletedAt) {
+      throw new Error('Task not found')
+    }
+
+    const updated: Task = {
+      ...task,
+      title: trimmed,
+      updatedAt: nowIso(),
+    }
+
+    await db.tasks.put(updated)
+    await enqueueSync(projectId, 'tasks', taskId, 'upsert')
+    return updated
+  },
+
   async toggleDone(projectId: string, taskId: string): Promise<Task> {
     assertProjectId(projectId)
     const task = await db.tasks.get(taskId)
@@ -54,6 +75,30 @@ export const taskRepository = {
     await db.tasks.put(updated)
     await enqueueSync(projectId, 'tasks', taskId, 'upsert')
     return updated
+  },
+
+  async reorder(projectId: string, categoryId: string, orderedIds: string[]): Promise<void> {
+    assertProjectId(projectId)
+    const tasks = await this.listByCategory(projectId, categoryId)
+    const byId = new Map(tasks.map((task) => [task.id, task]))
+    const reordered = orderedIds.map((id) => byId.get(id)).filter((task): task is Task => Boolean(task))
+    if (reordered.length !== tasks.length) return
+
+    const now = nowIso()
+    const changedIds: string[] = []
+
+    await db.transaction('rw', db.tasks, async () => {
+      for (let sortOrder = 0; sortOrder < reordered.length; sortOrder++) {
+        const task = reordered[sortOrder]
+        if (task.sortOrder === sortOrder) continue
+        await db.tasks.put({ ...task, sortOrder, updatedAt: now })
+        changedIds.push(task.id)
+      }
+    })
+
+    for (const id of changedIds) {
+      await enqueueSync(projectId, 'tasks', id, 'upsert')
+    }
   },
 
   async remove(projectId: string, taskId: string): Promise<void> {

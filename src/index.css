@@ -1,21 +1,39 @@
 @import 'tailwindcss';
 
+/* Палитра по мотивам aaa.events: небо, лайм, розовый CTA, холодный серый фон (без чужих ассетов). */
 @theme {
-  --color-cream: #faf8f5;
-  --color-cream-dark: #f0ebe3;
-  --color-ink: #3d3a36;
-  --color-muted: #7a756e;
-  --color-accent: #b8957a;
-  --color-accent-dark: #8b6f5c;
+  --color-sky: #b8ddf5;
+  --color-cream: #edeff2;
+  --color-cream-dark: #d5dae1;
+  --color-ink: #2a2a2e;
+  --color-muted: #5c6068;
+  --color-accent: #ff55a7;
+  --color-accent-dark: #e8489a;
+  --color-coral: #ff8562;
+  --color-highlight: #dff439;
+  --color-surface: #ffffff;
   --font-sans: system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, monospace;
 }
 
 @layer base {
   body {
-    @apply min-h-screen bg-cream text-ink antialiased;
+    @apply min-h-screen text-ink antialiased;
+    background: linear-gradient(
+      180deg,
+      var(--color-sky) 0%,
+      var(--color-cream) 32%,
+      var(--color-cream) 100%
+    );
   }
 
   #root {
     @apply min-h-screen;
+  }
+}
+
+@layer utilities {
+  .font-label {
+    font-family: var(--font-mono);
   }
 }

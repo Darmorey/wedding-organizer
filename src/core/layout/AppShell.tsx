@@ -9,13 +9,13 @@ export function AppShell() {
 
   return (
     <div className="mx-auto flex min-h-screen max-w-2xl flex-col">
-      <header className="sticky top-0 z-10 border-b border-cream-dark bg-cream/95 px-6 py-4 backdrop-blur">
+      <header className="sticky top-0 z-10 border-b border-cream-dark/80 bg-surface/90 px-6 py-4 backdrop-blur-md">
         <div className="flex items-start justify-between gap-3">
           <div>
-            <p className="text-xs font-medium uppercase tracking-wide text-accent">
+            <p className="font-label text-xs font-medium uppercase tracking-wide text-coral">
               Свадебный организатор
             </p>
-            <h1 className="text-lg font-semibold text-accent-dark">
+            <h1 className="text-lg font-semibold text-ink">
               {activeProject?.name ?? 'Проект'}
             </h1>
           </div>
@@ -35,7 +35,7 @@ export function AppShell() {
         <Outlet />
       </main>
 
-      <nav className="sticky bottom-0 border-t border-cream-dark bg-white px-4 py-2 pb-[max(0.5rem,env(safe-area-inset-bottom))]">
+      <nav className="sticky bottom-0 border-t border-cream-dark/80 bg-surface/95 px-4 py-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] backdrop-blur-md">
         <ul className="flex justify-around">
           {MAIN_NAV.map((item) => (
             <li key={item.path}>
@@ -44,8 +44,10 @@ export function AppShell() {
                 end={item.path === '/'}
                 className={({ isActive }) =>
                   [
-                    'flex min-w-20 flex-col items-center rounded-xl px-3 py-2 text-xs font-medium transition-colors',
-                    isActive ? 'text-accent-dark' : 'text-muted hover:text-ink',
+                    'flex min-w-20 flex-col items-center rounded-full px-3 py-2 text-xs font-medium transition-colors',
+                    isActive
+                      ? 'bg-accent text-white shadow-sm'
+                      : 'text-muted hover:bg-white/70 hover:text-ink',
                   ].join(' ')
                 }
               >
