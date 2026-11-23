@@ -4,11 +4,7 @@ import { Button } from '../../../core/ui/Button'
 import { Input } from '../../../core/ui/Input'
 import { AuthLayout } from '../components/AuthLayout'
 import { useAuth } from '../AuthProvider'
-import {
-  createWeddingProject,
-  joinWeddingProject,
-} from '../../../data/supabase/projectService'
-import { seedProjectCategories } from '../../../data/repositories/seedService'
+import { bootstrapNewProject, joinWeddingProject } from '../../../data/supabase/projectService'
 import { syncProject } from '../../../data/sync/syncEngine'
 import { translateAuthError } from '../utils/authErrors'
 
@@ -37,9 +33,7 @@ export function OnboardingPage() {
     setSubmitting(true)
 
     try {
-      const project = await createWeddingProject(projectName.trim())
-      await seedProjectCategories(project.id)
-      await syncProject(project.id)
+      const project = await bootstrapNewProject(projectName.trim())
       await refreshProjects()
       setActiveProjectId(project.id)
       navigate('/', { replace: true })

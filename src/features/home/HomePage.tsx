@@ -9,7 +9,7 @@ import { categoryRepository } from '../../data/repositories/categoryRepository'
 import { guestRepository } from '../../data/repositories/guestRepository'
 
 export function HomePage() {
-  const { user, activeProject, projects, setActiveProjectId, signOut } = useAuth()
+  const { user, activeProject, signOut } = useAuth()
 
   const stats = useLiveQuery(async () => {
     if (!activeProject?.id) return { total: 0, done: 0 }
@@ -98,21 +98,6 @@ export function HomePage() {
         </div>
       </div>
 
-      {projects.length > 1 ? (
-        <Card title="Активный проект">
-          <select
-            className="w-full rounded-xl border border-cream-dark bg-white px-3 py-2.5 text-sm"
-            value={activeProject?.id ?? ''}
-            onChange={(e) => setActiveProjectId(e.target.value)}
-          >
-            {projects.map((project) => (
-              <option key={project.id} value={project.id}>
-                {project.name}
-              </option>
-            ))}
-          </select>
-        </Card>
-      ) : null}
     </div>
   )
 }

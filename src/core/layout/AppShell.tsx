@@ -2,6 +2,7 @@ import { NavLink, Outlet } from 'react-router-dom'
 import { useAuth } from '../../features/auth/AuthProvider'
 import { useSync } from '../../data/sync/SyncProvider'
 import { MAIN_NAV } from '../registry/navigation'
+import { AppHeaderMenu } from './AppHeaderMenu'
 
 export function AppShell() {
   const { activeProject } = useAuth()
@@ -9,23 +10,26 @@ export function AppShell() {
 
   return (
     <div className="mx-auto flex min-h-screen max-w-2xl flex-col">
-      <header className="sticky top-0 z-10 border-b border-cream-dark/80 bg-surface/90 px-6 py-4 backdrop-blur-md">
-        <div className="flex items-start justify-between gap-3">
-          <div>
+      <header className="sticky top-0 z-20 overflow-visible border-b border-cream-dark/80 bg-surface px-6 py-4">
+        <div className="relative flex items-start justify-between gap-3">
+          <div className="min-w-0 flex-1">
             <p className="font-label text-xs font-medium uppercase tracking-wide text-coral">
               Свадебный организатор
             </p>
-            <h1 className="text-lg font-semibold text-ink">
-              {activeProject?.name ?? 'Проект'}
-            </h1>
+            <div className="mt-0.5 flex min-w-0 items-center gap-0.5">
+              <h1 className="min-w-0 flex-1 truncate text-lg font-semibold text-ink">
+                {activeProject?.name ?? 'Проект'}
+              </h1>
+              <AppHeaderMenu />
+            </div>
           </div>
-          <div className="text-right text-xs text-muted">
+          <div className="shrink-0 pt-5 text-right text-[10px] leading-snug text-muted sm:text-xs">
             {syncing ? (
               <span>Синхронизация…</span>
             ) : queueCount > 0 ? (
-              <span>Офлайн · {queueCount} в очереди</span>
+              <span>Офлайн · {queueCount}</span>
             ) : (
-              <span>Синхронизировано</span>
+              <span>Синхр.</span>
             )}
           </div>
         </div>

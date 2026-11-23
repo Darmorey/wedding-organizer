@@ -1,5 +1,8 @@
 import { supabase } from '../supabase/client'
 import type { WeddingProject } from '../../core/types/entity'
+import { purgeProjectLocalData } from '../local/purgeProjectLocalData'
+import { seedProjectCategories } from '../repositories/seedService'
+import { syncProject } from '../sync/syncEngine'
 
 function mapProject(row: {
   id: string
@@ -55,6 +58,29 @@ export async function createWeddingProject(name: string): Promise<WeddingProject
   }
 }
 
+export async function bootstrapNewProject(name: string): Promise<WeddingProject> {
+  const project = await createWeddingProject(name)
+  await seedProjectCategories(project.id)
+  await syncProject(project.id)
+  return project
+}
+
+export async function renameWeddingProject(projectId: string, name: string): Promise<void> {
+  const trimmed = name.trim()
+  if (!trimmed) throw new Error('Введите название проекта')
+
+  const { data, error } = await supabase
+    .from('wedding_projects')
+    .update({ name: trimmed })
+    .eq('id', projectId)
+    .select('id')
+
+  if (error) throw error
+  if (!data?.length) {
+    throw new Error('Не удалось переименовать. Переименовывать может только владелец проекта.')
+  }
+}
+
 export async function joinWeddingProject(inviteCode: string): Promise<string> {
   const { data, error } = await supabase.rpc('join_project', {
     p_invite_code: inviteCode.trim().toUpperCase(),
@@ -62,6 +88,40 @@ export async function joinWeddingProject(inviteCode: string): Promise<string> {
 
   if (error) throw error
   return data as string
+}
+
+export async function deleteWeddingProject(projectId: string): Promise<void> {
+  const { error: rpcError } = await supabase.rpc('delete_wedding_project', {
+    p_project_id: projectId,
+  })
+
+  if (!rpcError) {
+    await purgeProjectLocalData(projectId)
+    return
+  }
+
+  const missingRpc =
+    rpcError.code === 'PGRST202' ||
+    rpcError.message.includes('Could not find the function')
+
+  if (missingRpc) {
+    const { data, error } = await supabase
+      .from('wedding_projects')
+      .delete()
+      .eq('id', projectId)
+      .select('id')
+
+    if (error) throw error
+    if (!data?.length) {
+      throw new Error(
+        'Удаление заблокировано. Выполните в Supabase SQL Editor файл supabase/migrations/007_delete_wedding_project_rpc.sql (или 006_project_owner_delete.sql).',
+      )
+    }
+    await purgeProjectLocalData(projectId)
+    return
+  }
+
+  throw rpcError
 }
 
 export async function getProjectById(projectId: string): Promise<WeddingProject | null> {

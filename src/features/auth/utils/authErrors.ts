@@ -13,6 +13,9 @@ export function translateAuthError(message: string): string {
     'For security purposes': 'Слишком много попыток. Подождите минуту и попробуйте снова',
     'permission denied for table': 'Нет доступа к базе данных. Запустите миграцию 002_grants.sql в Supabase',
     '42501': 'Нет доступа к базе данных. Запустите миграцию 002_grants.sql в Supabase',
+    'Only the project owner can delete this project': 'Удалить проект может только владелец',
+    'Could not find the function': 'Запустите в Supabase миграцию 007_delete_wedding_project_rpc.sql',
+    delete_wedding_project: 'Запустите в Supabase миграцию 007_delete_wedding_project_rpc.sql',
   }
 
   for (const [key, value] of Object.entries(map)) {
