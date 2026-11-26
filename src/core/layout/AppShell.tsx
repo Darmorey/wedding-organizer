@@ -10,20 +10,20 @@ export function AppShell() {
 
   return (
     <div className="mx-auto flex min-h-screen max-w-2xl flex-col">
-      <header className="sticky top-0 z-20 overflow-visible border-b border-cream-dark/80 bg-surface px-6 py-4">
-        <div className="relative flex items-start justify-between gap-3">
+      <header className="sticky top-0 z-20 overflow-visible border-b border-cream-dark/80 bg-surface px-4 py-1.5">
+        <div className="relative flex items-center justify-between gap-2">
           <div className="min-w-0 flex-1">
-            <p className="font-label text-xs font-medium uppercase tracking-wide text-coral">
+            <p className="font-label text-[10px] font-medium uppercase tracking-wide text-coral">
               Свадебный организатор
             </p>
-            <div className="mt-0.5 flex min-w-0 items-center gap-0.5">
-              <h1 className="min-w-0 flex-1 truncate text-lg font-semibold text-ink">
+            <div className="flex min-w-0 items-center gap-0.5">
+              <h1 className="min-w-0 flex-1 truncate text-sm font-semibold leading-tight text-ink">
                 {activeProject?.name ?? 'Проект'}
               </h1>
               <AppHeaderMenu />
             </div>
           </div>
-          <div className="shrink-0 pt-5 text-right text-[10px] leading-snug text-muted sm:text-xs">
+          <div className="shrink-0 text-right text-[10px] leading-none text-muted">
             {syncing ? (
               <span>Синхронизация…</span>
             ) : queueCount > 0 ? (
@@ -35,7 +35,7 @@ export function AppShell() {
         </div>
       </header>
 
-      <main className="flex-1 px-6 py-6">
+      <main className="flex-1 px-6 py-3">
         <Outlet />
       </main>
 

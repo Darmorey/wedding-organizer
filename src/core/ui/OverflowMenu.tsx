@@ -4,6 +4,7 @@ interface OverflowMenuProps {
   ariaLabel: string
   disabled?: boolean
   widthClass?: string
+  triggerClassName?: string
   onClose?: () => void
   children: (close: () => void) => ReactNode
 }
@@ -12,6 +13,7 @@ export function OverflowMenu({
   ariaLabel,
   disabled,
   widthClass = 'w-52',
+  triggerClassName,
   onClose,
   children,
 }: OverflowMenuProps) {
@@ -31,7 +33,10 @@ export function OverflowMenu({
         aria-haspopup="menu"
         disabled={disabled}
         onClick={() => setOpen((v) => !v)}
-        className="rounded-lg px-2 py-0.5 text-2xl leading-none text-muted hover:bg-cream disabled:opacity-40"
+        className={
+          triggerClassName ??
+          'rounded-lg px-2 py-0.5 text-2xl leading-none text-muted hover:bg-cream disabled:opacity-40'
+        }
       >
         ⋮
       </button>

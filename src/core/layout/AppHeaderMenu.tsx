@@ -9,10 +9,20 @@ import { OverflowMenu, OverflowMenuItem } from '../ui/OverflowMenu'
 import type { WeddingProject } from '../../core/types/entity'
 import { translateAuthError } from '../../features/auth/utils/authErrors'
 
-type MenuPanel = 'root' | 'projects' | 'create' | 'rename'
+type MenuPanel = 'root' | 'projects' | 'create' | 'rename' | 'account'
 
 export function AppHeaderMenu() {
-  const { session, user, projects, activeProjectId, setActiveProjectId, refreshProjects } = useAuth()
+  const {
+    session,
+    user,
+    projects,
+    activeProject,
+    activeProjectId,
+    setActiveProjectId,
+    refreshProjects,
+    signOut,
+  } = useAuth()
+  const [inviteCopied, setInviteCopied] = useState(false)
   const createInputRef = useRef<HTMLInputElement>(null)
   const renameInputRef = useRef<HTMLInputElement>(null)
   const [panel, setPanel] = useState<MenuPanel>('root')
@@ -163,10 +173,65 @@ export function AppHeaderMenu() {
           )
         }
 
-        if (panel === 'projects') {
+        if (panel === 'account') {
           return (
             <>
               <OverflowMenuItem onClick={() => setPanel('root')}>← Назад</OverflowMenuItem>
+              <div className="border-b border-cream-dark px-3 py-3">
+                <p className="font-label text-[10px] font-medium uppercase tracking-wide text-coral">
+                  Аккаунт
+                </p>
+                <p className="mt-1.5 break-all text-sm text-ink">{user?.email ?? '—'}</p>
+              </div>
+              <OverflowMenuItem
+                danger
+                onClick={() => {
+                  resetMenu()
+                  close()
+                  void signOut()
+                }}
+              >
+                Выйти
+              </OverflowMenuItem>
+            </>
+          )
+        }
+
+        if (panel === 'projects') {
+          async function copyInviteCode() {
+            if (!activeProject?.inviteCode) return
+            try {
+              await navigator.clipboard.writeText(activeProject.inviteCode)
+              setInviteCopied(true)
+              window.setTimeout(() => setInviteCopied(false), 2000)
+            } catch {
+              window.prompt('Код приглашения', activeProject.inviteCode)
+            }
+          }
+
+          return (
+            <>
+              <OverflowMenuItem onClick={() => setPanel('root')}>← Назад</OverflowMenuItem>
+              {activeProject ? (
+                <div className="border-b border-cream-dark px-3 py-3">
+                  <p className="font-label text-[10px] font-medium uppercase tracking-wide text-coral">
+                    Пригласить партнёра
+                  </p>
+                  <p className="mt-2 text-xs text-muted">
+                    Передайте код — партнёр сможет присоединиться к проекту при регистрации.
+                  </p>
+                  <p className="mt-2 font-mono text-lg font-semibold tracking-wider text-accent">
+                    {activeProject.inviteCode}
+                  </p>
+                  <button
+                    type="button"
+                    className="mt-2 text-xs font-medium text-accent-dark hover:text-accent"
+                    onClick={() => void copyInviteCode()}
+                  >
+                    {inviteCopied ? 'Скопировано' : 'Скопировать код'}
+                  </button>
+                </div>
+              ) : null}
               {projects.length === 0 ? (
                 <p className="px-3 py-2 text-xs text-muted">Нет проектов</p>
               ) : (
@@ -260,14 +325,24 @@ export function AppHeaderMenu() {
         }
 
         return (
-          <OverflowMenuItem
-            onClick={() => {
-              setRowMenuId(null)
-              setPanel('projects')
-            }}
-          >
-            Проект
-          </OverflowMenuItem>
+          <>
+            <OverflowMenuItem
+              onClick={() => {
+                setRowMenuId(null)
+                setPanel('projects')
+              }}
+            >
+              Проект
+            </OverflowMenuItem>
+            <OverflowMenuItem
+              onClick={() => {
+                setRowMenuId(null)
+                setPanel('account')
+              }}
+            >
+              Аккаунт
+            </OverflowMenuItem>
+          </>
         )
       }}
     </OverflowMenu>

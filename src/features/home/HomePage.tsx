@@ -1,81 +1,50 @@
 import { Link } from 'react-router-dom'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { useAuth } from '../auth/AuthProvider'
-import { Card } from '../../core/ui/Card'
 import { ProgressBar } from '../../core/ui/ProgressBar'
-import { Button } from '../../core/ui/Button'
 import { db } from '../../data/db/database'
 import { categoryRepository } from '../../data/repositories/categoryRepository'
-import { guestRepository } from '../../data/repositories/guestRepository'
 
 export function HomePage() {
-  const { user, activeProject, signOut } = useAuth()
+  const { activeProjectId } = useAuth()
 
   const stats = useLiveQuery(async () => {
-    if (!activeProject?.id) return { total: 0, done: 0 }
-    const tasks = await db.tasks.where('projectId').equals(activeProject.id).toArray()
+    if (!activeProjectId) return { total: 0, done: 0 }
+    const tasks = await db.tasks.where('projectId').equals(activeProjectId).toArray()
     const active = tasks.filter((task) => !task.deletedAt)
     return {
       total: active.length,
       done: active.filter((task) => task.done).length,
     }
-  }, [activeProject?.id])
+  }, [activeProjectId])
 
   const categories = useLiveQuery(async () => {
-    if (!activeProject?.id) return []
-    return categoryRepository.listByProject(activeProject.id)
-  }, [activeProject?.id])
-
-  const guestStats = useLiveQuery(async () => {
-    if (!activeProject?.id) return null
-    return guestRepository.getStats(activeProject.id)
-  }, [activeProject?.id])
+    if (!activeProjectId) return []
+    return categoryRepository.listByProject(activeProjectId)
+  }, [activeProjectId])
 
   const percent =
     stats && stats.total > 0 ? Math.round((stats.done / stats.total) * 100) : 0
 
   return (
     <div className="space-y-6">
-      <div className="flex items-start justify-between gap-4">
-        <div>
-          <p className="text-sm text-muted">{user?.email}</p>
+      <div className="rounded-2xl border border-cream-dark bg-surface px-4 py-3 shadow-sm">
+        <div className="mb-2 flex items-center justify-between gap-3">
+          <div className="min-w-0">
+            <p className="font-label text-[10px] font-medium uppercase tracking-wide text-coral">
+              Задачи
+            </p>
+            <p className="text-sm font-medium text-ink">Общий прогресс</p>
+          </div>
+          <span className="shrink-0 text-2xl font-semibold tabular-nums text-accent-dark">
+            {percent}%
+          </span>
         </div>
-        <Button variant="ghost" onClick={() => signOut()}>
-          Выйти
-        </Button>
+        <ProgressBar value={percent} className="h-1.5" />
+        <p className="mt-1.5 text-xs text-muted">
+          {stats?.done ?? 0} из {stats?.total ?? 0} выполнено
+        </p>
       </div>
-
-      <Card title="Общий прогресс" subtitle="Задачи">
-        <p className="mb-2 text-3xl font-semibold text-accent-dark">{percent}%</p>
-        <p className="mb-3 text-sm text-muted">
-          {stats?.done ?? 0} из {stats?.total ?? 0} задач выполнено
-        </p>
-        <ProgressBar value={percent} />
-      </Card>
-
-      <Card title="Гости" subtitle="RSVP">
-        <p className="mb-2 text-sm text-muted">
-          Подтвердили: <span className="font-medium text-ink">{guestStats?.attendingPeople ?? 0}</span>{' '}
-          чел. ({guestStats?.attendingAdults ?? 0} взр., {guestStats?.attendingChildren ?? 0} дет.)
-        </p>
-        <p className="mb-3 text-xs text-muted">
-          Ожидаем {guestStats?.expectedPeople ?? 0} · в списке {guestStats?.invited ?? 0} записей
-        </p>
-        <Link to="/guests" className="text-sm font-medium text-accent-dark hover:text-accent">
-          Открыть список →
-        </Link>
-      </Card>
-
-      {activeProject ? (
-        <Card title="Пригласить партнёра">
-          <p className="text-sm text-muted">
-            Код приглашения:{' '}
-            <span className="font-mono font-semibold text-accent-dark">
-              {activeProject.inviteCode}
-            </span>
-          </p>
-        </Card>
-      ) : null}
 
       <div>
         <div className="mb-3 flex items-center justify-between">
@@ -85,7 +54,7 @@ export function HomePage() {
           </Link>
         </div>
         <div className="space-y-2">
-          {(categories ?? []).slice(0, 4).map((category) => (
+          {(categories ?? []).map((category) => (
             <Link
               key={category.id}
               to={`/categories/${category.id}`}

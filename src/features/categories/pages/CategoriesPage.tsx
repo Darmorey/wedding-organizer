@@ -4,7 +4,7 @@ import { db } from '../../../data/db/database'
 import { useAuth } from '../../auth/AuthProvider'
 import { categoryRepository } from '../../../data/repositories/categoryRepository'
 import { CategoryCard } from '../components/CategoryCard'
-import { Button } from '../../../core/ui/Button'
+import { AddButton } from '../../../core/ui/AddButton'
 import { EmptyState } from '../../../core/ui/EmptyState'
 
 const fieldClass =
@@ -84,14 +84,12 @@ export function CategoriesPage() {
               aria-label="Иконка"
               className={`w-14 shrink-0 text-center ${fieldClass}`}
             />
-            <Button
+            <AddButton
               type="submit"
+              busy={submitting}
               disabled={submitting || !name.trim()}
-              className="shrink-0 px-4"
               aria-label="Добавить задачу"
-            >
-              {submitting ? '…' : '+'}
-            </Button>
+            />
           </div>
         </label>
       </form>

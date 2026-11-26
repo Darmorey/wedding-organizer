@@ -3,9 +3,11 @@ import { supabase } from '../supabase/client'
 import {
   mapCategoryFromRow,
   mapGuestFromRow,
+  mapMoodItemFromRow,
   mapTaskFromRow,
   type CategoryRow,
   type GuestRow,
+  type MoodItemRow,
   type TaskRow,
 } from '../supabase/mappers'
 import { db } from '../db/database'
@@ -58,6 +60,21 @@ export function subscribeToProject(
           const remote = mapGuestFromRow(payload.new as GuestRow)
           const local = await db.guests.get(remote.id)
           await db.guests.put(mergeEntity(local, remote))
+        }
+        onChange()
+      },
+    )
+    .on(
+      'postgres_changes',
+      { event: '*', schema: 'public', table: 'mood_items', filter: `project_id=eq.${projectId}` },
+      async (payload) => {
+        if (payload.eventType === 'DELETE') {
+          const id = (payload.old as { id?: string }).id
+          if (id) await db.moodItems.delete(id)
+        } else {
+          const remote = mapMoodItemFromRow(payload.new as MoodItemRow)
+          const local = await db.moodItems.get(remote.id)
+          await db.moodItems.put(mergeEntity(local, remote))
         }
         onChange()
       },

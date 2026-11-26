@@ -26,7 +26,7 @@ export function Button({
     <button
       type={type}
       className={[
-        'rounded-full px-4 py-2.5 text-sm font-medium transition-colors',
+        'inline-flex items-center justify-center rounded-full px-4 py-2.5 text-sm font-medium leading-none transition-colors',
         variants[variant],
         fullWidth ? 'w-full' : '',
         className,

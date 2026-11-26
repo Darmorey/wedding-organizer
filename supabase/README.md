@@ -42,11 +42,18 @@ For password reset, the link redirects to `/auth/reset-password`.
 
 Если sync падает на поле спутника — выполни **`migrations/004_guests_plus_one_child.sql`** в SQL Editor.
 
-## 8. Realtime (для синхронизации между партнёрами)
+## 8. Мудборд (декор)
+
+Выполни **`migrations/005_mood_items.sql`** в SQL Editor.
+
+**Database → Replication** — включите replication для `mood_items`.
+
+## 9. Realtime (для синхронизации между партнёрами)
 
 **Database → Replication** — включите replication для таблиц:
 - `categories`
 - `tasks`
 - `guests`
+- `mood_items`
 
 Без этого изменения будут синхронизироваться при входе и по кнопке, но не мгновенно между устройствами.

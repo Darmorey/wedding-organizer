@@ -1,5 +1,5 @@
 import { useRef, useState, type FormEvent } from 'react'
-import { Button } from '../../../core/ui/Button'
+import { AddButton } from '../../../core/ui/AddButton'
 import { GUEST_GROUPS, GUEST_GROUP_SHORT, guestGroupShortLabel } from '../../../core/config/guests'
 
 interface GuestQuickAddProps {
@@ -87,9 +87,11 @@ export function GuestQuickAdd({
             </ToggleChip>
           ) : null}
         </div>
-        <Button type="submit" disabled={disabled || submitting || !name.trim()} className="shrink-0">
-          {submitting ? '…' : '+'}
-        </Button>
+        <AddButton
+          type="submit"
+          busy={submitting}
+          disabled={disabled || submitting || !name.trim()}
+        />
       </div>
       <div className="flex flex-wrap gap-1.5">
         {presetGroups.map((group) => (

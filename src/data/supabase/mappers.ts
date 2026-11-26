@@ -1,4 +1,5 @@
-import type { Category, Guest, Task } from '../../core/types/entity'
+import { defaultTextStyle, hydrateMoodItem, readCanvasLayout, withCanvasMetadata } from '../../core/config/moodCanvas'
+import type { Category, Guest, MoodItem, MoodKind, Task, UploadStatus } from '../../core/types/entity'
 
 export interface CategoryRow {
   id: string
@@ -129,5 +130,74 @@ export function mapGuestToRow(guest: Guest): GuestRow {
     created_at: guest.createdAt,
     updated_at: guest.updatedAt,
     deleted_at: guest.deletedAt ?? null,
+  }
+}
+
+export interface MoodItemRow {
+  id: string
+  project_id: string
+  category_id: string
+  kind: Exclude<MoodKind, 'note'>
+  caption: string
+  url: string
+  storage_path: string
+  file_name: string
+  mime_type: string
+  size_bytes: number
+  upload_status: UploadStatus
+  metadata: Record<string, unknown>
+  created_at: string
+  updated_at: string
+  deleted_at: string | null
+}
+
+function moodSortOrderFromMetadata(metadata: Record<string, unknown> | undefined, createdAt: string): number {
+  const value = metadata?.sortOrder
+  if (typeof value === 'number' && Number.isFinite(value)) return value
+  const created = Date.parse(createdAt)
+  return Number.isFinite(created) ? -created : 0
+}
+
+export function mapMoodItemFromRow(row: MoodItemRow): MoodItem {
+  const metadata = row.metadata ?? {}
+  return hydrateMoodItem({
+    id: row.id,
+    projectId: row.project_id,
+    categoryId: row.category_id,
+    kind: row.kind,
+    caption: row.caption,
+    url: row.url,
+    storagePath: row.storage_path,
+    fileName: row.file_name,
+    mimeType: row.mime_type,
+    sizeBytes: Number(row.size_bytes ?? 0),
+    uploadStatus: row.upload_status,
+    sortOrder: moodSortOrderFromMetadata(metadata, row.created_at),
+    canvas: readCanvasLayout(metadata, 0),
+    textStyle: defaultTextStyle(),
+    metadata,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+    deletedAt: row.deleted_at,
+  })
+}
+
+export function mapMoodItemToRow(item: MoodItem): MoodItemRow {
+  return {
+    id: item.id,
+    project_id: item.projectId,
+    category_id: item.categoryId,
+    kind: item.kind === 'image' ? 'image' : 'link',
+    caption: item.caption,
+    url: item.url,
+    storage_path: item.storagePath,
+    file_name: item.fileName,
+    mime_type: item.mimeType,
+    size_bytes: item.sizeBytes,
+    upload_status: item.uploadStatus,
+    metadata: withCanvasMetadata(item),
+    created_at: item.createdAt,
+    updated_at: item.updatedAt,
+    deleted_at: item.deletedAt ?? null,
   }
 }
