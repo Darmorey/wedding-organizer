@@ -10,6 +10,13 @@ import { CanvasMoodBoard } from '../components/CanvasMoodBoard'
 import { AddButton } from '../../../core/ui/AddButton'
 import { ProgressBar } from '../../../core/ui/ProgressBar'
 import { canvasAllowsCards, moodBoardMode, placeBoardKind } from '../../../core/config/moodboard'
+import {
+  DEADLINE_PHASES,
+  deadlinePhaseForTitle,
+  deadlinePhaseOf,
+  defaultDeadlineForCategory,
+  type DeadlinePhase,
+} from '../../../core/config/deadlines'
 import { examplesForCategory } from '../../../core/config/taskExamples'
 import { TaskExamplesPanel } from '../components/TaskExamplesPanel'
 
@@ -19,6 +26,7 @@ export function CategoryDetailPage() {
   const [submitting, setSubmitting] = useState(false)
   const [adding, setAdding] = useState(false)
   const [taskTitle, setTaskTitle] = useState('')
+  const [taskDeadline, setTaskDeadline] = useState<DeadlinePhase>('m12_9')
   const addInputRef = useRef<HTMLInputElement>(null)
   const [tab, setTab] = useState<'tasks' | 'mood'>('tasks')
   const [examplesOpen, setExamplesOpen] = useState(false)
@@ -56,6 +64,7 @@ export function CategoryDetailPage() {
   function openAdd() {
     setAdding(true)
     setTaskTitle('')
+    setTaskDeadline(defaultDeadlineForCategory(category.name))
     requestAnimationFrame(() => addInputRef.current?.focus())
   }
 
@@ -65,11 +74,11 @@ export function CategoryDetailPage() {
   }
 
   async function submitAdd() {
-    if (!activeProjectId || submitting || !taskTitle.trim()) return
+    if (!activeProjectId || submitting || !taskTitle.trim() || !taskDeadline) return
 
     setSubmitting(true)
     try {
-      await taskRepository.create(activeProjectId, categoryId, taskTitle.trim())
+      await taskRepository.create(activeProjectId, categoryId, taskTitle.trim(), taskDeadline)
       setTaskTitle('')
       requestAnimationFrame(() => addInputRef.current?.focus())
     } finally {
@@ -150,7 +159,7 @@ export function CategoryDetailPage() {
         />
       ) : (
       <div>
-        <div className="mb-2 flex items-center justify-end gap-2">
+        <div className={adding ? 'mb-2' : 'mb-2 flex items-center justify-end gap-2'}>
           {exampleTasks.length > 0 && !adding ? (
             <button
               type="button"
@@ -161,35 +170,52 @@ export function CategoryDetailPage() {
             </button>
           ) : null}
           {adding ? (
-            <>
-              <input
-                ref={addInputRef}
-                type="text"
-                value={taskTitle}
-                onChange={(e) => setTaskTitle(e.target.value)}
-                onKeyDown={handleAddKeyDown}
-                placeholder="Что нужно сделать?"
-                autoComplete="off"
-                disabled={submitting}
-                className="min-w-0 flex-1 rounded-xl border border-cream-dark bg-white px-3 py-2.5 text-sm text-ink placeholder:text-muted focus:border-accent focus:outline-none focus:ring-2 focus:ring-accent/20"
-              />
-              <AddButton
-                type="button"
-                busy={submitting}
-                disabled={submitting || !taskTitle.trim()}
-                aria-label="Добавить подзадачу"
-                onClick={() => void submitAdd()}
-              />
-              <button
-                type="button"
-                aria-label="Отмена"
-                disabled={submitting}
-                onClick={cancelAdd}
-                className="shrink-0 rounded-lg px-2 py-1 text-lg text-muted hover:bg-cream"
-              >
-                ×
-              </button>
-            </>
+            <div className="flex min-w-0 flex-1 flex-col gap-1.5">
+              <div className="flex items-center gap-2">
+                <input
+                  ref={addInputRef}
+                  type="text"
+                  value={taskTitle}
+                  onChange={(e) => setTaskTitle(e.target.value)}
+                  onKeyDown={handleAddKeyDown}
+                  placeholder="Что нужно сделать?"
+                  autoComplete="off"
+                  disabled={submitting}
+                  className="min-w-0 flex-1 rounded-xl border border-cream-dark bg-white px-3 py-2.5 text-sm text-ink placeholder:text-muted focus:border-accent focus:outline-none focus:ring-2 focus:ring-accent/20"
+                />
+                <AddButton
+                  type="button"
+                  busy={submitting}
+                  disabled={submitting || !taskTitle.trim()}
+                  aria-label="Добавить задачу"
+                  onClick={() => void submitAdd()}
+                />
+                <button
+                  type="button"
+                  aria-label="Отмена"
+                  disabled={submitting}
+                  onClick={cancelAdd}
+                  className="shrink-0 rounded-lg px-2 py-1 text-lg text-muted hover:bg-cream"
+                >
+                  ×
+                </button>
+              </div>
+              <label className="flex min-w-0 items-center gap-2">
+                <span className="shrink-0 text-xs text-muted">Срок</span>
+                <select
+                  value={taskDeadline}
+                  disabled={submitting}
+                  onChange={(event) => setTaskDeadline(event.target.value as DeadlinePhase)}
+                  className="min-w-0 flex-1 rounded-lg border border-cream-dark bg-white px-2 py-1.5 text-xs text-ink focus:border-accent focus:outline-none focus:ring-2 focus:ring-accent/20"
+                >
+                  {DEADLINE_PHASES.map((phase) => (
+                    <option key={phase.id} value={phase.id}>
+                      {phase.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            </div>
           ) : (
             <AddButton
               type="button"
@@ -210,7 +236,9 @@ export function CategoryDetailPage() {
                 const existing = new Set((tasks ?? []).map((task) => task.title.trim().toLowerCase()))
                 for (const title of titles) {
                   if (existing.has(title.trim().toLowerCase())) continue
-                  await taskRepository.create(activeProjectId, categoryId, title)
+                  const phase =
+                    deadlinePhaseForTitle(title, category.name) ?? defaultDeadlineForCategory(category.name)
+                  await taskRepository.create(activeProjectId, categoryId, title, phase)
                   existing.add(title.trim().toLowerCase())
                 }
               } finally {
@@ -221,6 +249,7 @@ export function CategoryDetailPage() {
         ) : null}
         <TaskChecklist
           tasks={tasks ?? []}
+          categoryName={category.name}
           onToggle={(taskId) => {
             taskRepository.toggleDone(activeProjectId, taskId).catch(console.error)
           }}
@@ -232,6 +261,16 @@ export function CategoryDetailPage() {
           }}
           onReorder={(orderedIds) => {
             taskRepository.reorder(activeProjectId, categoryId, orderedIds).catch(console.error)
+          }}
+          onDeadline={(taskId, phase) => {
+            taskRepository.updateDeadline(activeProjectId, taskId, phase).catch(console.error)
+          }}
+          onAddSubtask={async (parentId, title) => {
+            const parent = (tasks ?? []).find((task) => task.id === parentId)
+            const phase =
+              (parent ? deadlinePhaseOf(parent, category.name) : null) ??
+              defaultDeadlineForCategory(category.name)
+            await taskRepository.create(activeProjectId, categoryId, title, phase, parentId)
           }}
         />
       </div>

@@ -10,17 +10,33 @@ export interface CategoryTemplate {
   tasks: string[]
 }
 
-export const CATEGORY_TEMPLATES: CategoryTemplate[] = [
-  { name: 'Дата и бюджет', icon: '📅', tasks: TASK_EXAMPLES['Дата и бюджет'] ?? [] },
-  { name: 'Площадка', icon: '🏛️', tasks: TASK_EXAMPLES['Площадка'] ?? [] },
-  { name: 'Гости', icon: '👥', tasks: TASK_EXAMPLES['Гости'] ?? [] },
-  { name: 'Кейтеринг', icon: '🍽️', tasks: TASK_EXAMPLES['Кейтеринг'] ?? [] },
-  { name: 'Декор и цветы', icon: '💐', tasks: TASK_EXAMPLES['Декор и цветы'] ?? [] },
-  { name: 'Одежда', icon: '👗', tasks: TASK_EXAMPLES['Одежда'] ?? [] },
-  { name: 'Музыка', icon: '🎵', tasks: TASK_EXAMPLES['Музыка'] ?? [] },
-  { name: 'Фото и видео', icon: '📷', tasks: TASK_EXAMPLES['Фото и видео'] ?? [] },
-  { name: 'Приглашения', icon: '💌', tasks: TASK_EXAMPLES['Приглашения'] ?? [] },
-  { name: 'Документы', icon: '📄', tasks: TASK_EXAMPLES['Документы'] ?? [] },
-  { name: 'День свадьбы', icon: '⏱️', tasks: TASK_EXAMPLES['День свадьбы'] ?? [] },
-  { name: 'Медовый месяц', icon: '✈️', tasks: TASK_EXAMPLES['Медовый месяц'] ?? [] },
-]
+export const CATEGORY_ICONS = {
+  'Дата и бюджет': '📅',
+  Площадка: '🏛️',
+  Гости: '👥',
+  Кейтеринг: '🍽️',
+  'Декор и цветы': '💐',
+  Одежда: '👗',
+  Музыка: '🎵',
+  'Фото и видео': '📷',
+  Приглашения: '💌',
+  Документы: '📄',
+  'День свадьбы': '⏱️',
+  'Медовый месяц': '✈️',
+} as const
+
+export const CATEGORY_TEMPLATES: CategoryTemplate[] = (
+  Object.keys(CATEGORY_ICONS) as (keyof typeof CATEGORY_ICONS)[]
+).map((name) => ({
+  name,
+  icon: CATEGORY_ICONS[name],
+  tasks: TASK_EXAMPLES[name] ?? [],
+}))
+
+export function emptyCategoryTemplates(): CategoryTemplate[] {
+  return (Object.keys(CATEGORY_ICONS) as (keyof typeof CATEGORY_ICONS)[]).map((name) => ({
+    name,
+    icon: CATEGORY_ICONS[name],
+    tasks: [],
+  }))
+}

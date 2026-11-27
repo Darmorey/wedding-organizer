@@ -1,16 +1,20 @@
 import type { Category } from '../../core/types/entity'
 import { createId, nowIso } from '../../core/utils/id'
-import { CATEGORY_TEMPLATES } from '../../core/config/templates'
+import { deadlinePhaseForTitle, defaultDeadlineForCategory } from '../../core/config/deadlines'
+import { CATEGORY_TEMPLATES, type CategoryTemplate } from '../../core/config/templates'
 import { db } from '../db/database'
 import { enqueueSync } from './baseRepository'
 
-export async function seedProjectCategories(projectId: string): Promise<void> {
+export async function seedProjectCategories(
+  projectId: string,
+  templates: CategoryTemplate[] = CATEGORY_TEMPLATES,
+): Promise<void> {
   const existing = await db.categories.where('projectId').equals(projectId).count()
   if (existing > 0) return
 
   const now = nowIso()
   const categories: Category[] = []
-  const tasks = CATEGORY_TEMPLATES.flatMap((template, categoryIndex) => {
+  const tasks = templates.flatMap((template, categoryIndex) => {
     const categoryId = createId()
     categories.push({
       id: categoryId,
@@ -24,18 +28,22 @@ export async function seedProjectCategories(projectId: string): Promise<void> {
       deletedAt: null,
     })
 
-    return template.tasks.map((title, taskIndex) => ({
+    return template.tasks.map((title, taskIndex) => {
+      const deadlinePhase =
+        deadlinePhaseForTitle(title, template.name) ?? defaultDeadlineForCategory(template.name)
+      return {
       id: createId(),
       projectId,
       categoryId,
       title,
       done: false,
       sortOrder: taskIndex,
-      metadata: {},
+      metadata: deadlinePhase ? { deadlinePhase } : {},
       createdAt: now,
       updatedAt: now,
       deletedAt: null,
-    }))
+    }
+    })
   })
 
   await db.transaction('rw', db.categories, db.tasks, db.syncQueue, async () => {

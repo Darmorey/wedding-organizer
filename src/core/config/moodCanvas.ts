@@ -72,6 +72,18 @@ export function nextCanvasLayout(existing: MoodItem[], kind: MoodKind): MoodCanv
   }
 }
 
+export function nextCanvasLayouts(existing: MoodItem[], count: number, kind: MoodKind): MoodCanvasLayout[] {
+  const first = nextCanvasLayout(existing, kind)
+  const cols = 3
+  const gap = 16
+  return Array.from({ length: count }, (_, index) => ({
+    ...first,
+    x: first.x + (index % cols) * (first.width + gap),
+    y: first.y + Math.floor(index / cols) * (first.height + gap),
+    z: first.z + index,
+  }))
+}
+
 export type ResizeCorner = 'nw' | 'ne' | 'sw' | 'se'
 export type ResizeHandle = ResizeCorner | 'n' | 'e' | 's' | 'w'
 

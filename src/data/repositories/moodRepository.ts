@@ -1,4 +1,10 @@
-import { defaultTextStyle, hydrateMoodItem, nextCanvasLayout, withCanvasMetadata } from '../../core/config/moodCanvas'
+import {
+  defaultTextStyle,
+  hydrateMoodItem,
+  nextCanvasLayout,
+  nextCanvasLayouts,
+  withCanvasMetadata,
+} from '../../core/config/moodCanvas'
 import type { MoodCanvasLayout, MoodItem, MoodTextStyle } from '../../core/types/entity'
 import { createId, nowIso } from '../../core/utils/id'
 import { compressImage } from '../media/compressImage'
@@ -78,7 +84,26 @@ export const moodRepository = {
     return item
   },
 
-  async addImage(projectId: string, categoryId: string, file: File, caption: string): Promise<MoodItem> {
+  async addImages(projectId: string, categoryId: string, files: File[]): Promise<MoodItem[]> {
+    const images = files.filter((file) => file.type.startsWith('image/') || /\.(jpe?g|png|webp|gif)$/i.test(file.name))
+    if (images.length === 0) throw new Error('Выберите фото')
+
+    const existing = await this.listByCategory(projectId, categoryId)
+    const layouts = nextCanvasLayouts(existing, images.length, 'image')
+    const created: MoodItem[] = []
+    for (let index = 0; index < images.length; index++) {
+      created.push(await this.addImage(projectId, categoryId, images[index], '', layouts[index]))
+    }
+    return created
+  },
+
+  async addImage(
+    projectId: string,
+    categoryId: string,
+    file: File,
+    caption: string,
+    canvasOverride?: MoodCanvasLayout,
+  ): Promise<MoodItem> {
     assertProjectId(projectId)
     const now = nowIso()
     const id = createId()
@@ -89,7 +114,7 @@ export const moodRepository = {
 
     const existing = await this.listByCategory(projectId, categoryId)
     const sortOrder = existing.length === 0 ? 0 : Math.min(...existing.map((item) => item.sortOrder ?? 0)) - 1
-    const canvas = nextCanvasLayout(existing, 'image')
+    const canvas = canvasOverride ?? nextCanvasLayout(existing, 'image')
     const item: MoodItem = {
       id,
       projectId,

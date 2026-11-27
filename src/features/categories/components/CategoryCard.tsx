@@ -1,6 +1,7 @@
 import { useEffect, useRef, type KeyboardEvent, type PointerEvent as ReactPointerEvent } from 'react'
 import { Link } from 'react-router-dom'
 import type { Category } from '../../../core/types/entity'
+import { DragGrip } from '../../../core/ui/DragGrip'
 import { OverflowMenu, OverflowMenuItem } from '../../../core/ui/OverflowMenu'
 import { ProgressBar } from '../../../core/ui/ProgressBar'
 
@@ -57,9 +58,9 @@ export function CategoryCard({
           type="button"
           aria-label="Перетащить"
           onPointerDown={onDragPointerDown}
-          className="shrink-0 cursor-grab touch-none rounded-l-xl px-1.5 py-3 text-muted hover:bg-cream active:cursor-grabbing"
+          className="flex w-5 shrink-0 cursor-grab touch-none items-center justify-center self-stretch rounded-l-xl text-muted hover:bg-cream active:cursor-grabbing"
         >
-          <span className="block leading-none">⋮⋮</span>
+          <DragGrip />
         </button>
       ) : null}
       {editing ? (

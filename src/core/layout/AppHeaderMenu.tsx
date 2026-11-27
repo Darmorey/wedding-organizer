@@ -8,8 +8,10 @@ import {
 import { OverflowMenu, OverflowMenuItem } from '../ui/OverflowMenu'
 import type { WeddingProject } from '../../core/types/entity'
 import { translateAuthError } from '../../features/auth/utils/authErrors'
+import { ProjectCreateWizard } from '../../features/projects/ProjectCreateWizard'
+import type { CategoryTemplate } from '../config/templates'
 
-type MenuPanel = 'root' | 'projects' | 'create' | 'rename' | 'account'
+type MenuPanel = 'root' | 'projects' | 'rename' | 'account'
 
 export function AppHeaderMenu() {
   const {
@@ -23,7 +25,6 @@ export function AppHeaderMenu() {
     signOut,
   } = useAuth()
   const [inviteCopied, setInviteCopied] = useState(false)
-  const createInputRef = useRef<HTMLInputElement>(null)
   const renameInputRef = useRef<HTMLInputElement>(null)
   const [panel, setPanel] = useState<MenuPanel>('root')
   const [rowMenuId, setRowMenuId] = useState<string | null>(null)
@@ -31,11 +32,11 @@ export function AppHeaderMenu() {
   const [deletingId, setDeletingId] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
   const [formError, setFormError] = useState<string | null>(null)
-  const [createName, setCreateName] = useState('')
+  const [createOpen, setCreateOpen] = useState(false)
+  const [createError, setCreateError] = useState<string | null>(null)
   const [renameName, setRenameName] = useState('')
 
   useEffect(() => {
-    if (panel === 'create') createInputRef.current?.focus()
     if (panel === 'rename') renameInputRef.current?.focus()
   }, [panel])
 
@@ -48,7 +49,6 @@ export function AppHeaderMenu() {
     setRowMenuId(null)
     setRenameTarget(null)
     setFormError(null)
-    setCreateName('')
   }
 
   function isProjectOwner(project: WeddingProject) {
@@ -79,25 +79,19 @@ export function AppHeaderMenu() {
     }
   }
 
-  async function handleCreateProject(close: () => void) {
+  async function handleCreateProject(name: string, templates: CategoryTemplate[] | null) {
     if (busy) return
-    const name = createName.trim()
-    if (!name) {
-      setFormError('Введите название')
-      return
-    }
-
     setBusy(true)
-    setFormError(null)
+    setCreateError(null)
     try {
-      const project = await bootstrapNewProject(name)
+      const project = await bootstrapNewProject(name, templates)
       await refreshProjects()
       setActiveProjectId(project.id)
+      setCreateOpen(false)
       resetMenu()
-      close()
     } catch (error) {
       console.error(error)
-      setFormError(
+      setCreateError(
         error instanceof Error ? translateAuthError(error.message) : 'Не удалось создать проект',
       )
     } finally {
@@ -131,28 +125,9 @@ export function AppHeaderMenu() {
   }
 
   return (
+    <>
     <OverflowMenu ariaLabel="Меню проекта" disabled={deleting} widthClass="w-56" onClose={resetMenu}>
       {(close) => {
-        if (panel === 'create') {
-          return (
-            <FormPanel
-              title="Новый проект"
-              value={createName}
-              inputRef={createInputRef}
-              busy={busy}
-              error={formError}
-              placeholder="Например: Свадьба 2026"
-              submitLabel={busy ? 'Создание…' : 'Создать'}
-              onChange={setCreateName}
-              onSubmit={() => void handleCreateProject(close)}
-              onBack={() => {
-                setFormError(null)
-                setPanel('projects')
-              }}
-            />
-          )
-        }
-
         if (panel === 'rename' && renameTarget) {
           return (
             <FormPanel
@@ -315,7 +290,10 @@ export function AppHeaderMenu() {
                 onClick={() => {
                   setFormError(null)
                   setRowMenuId(null)
-                  setPanel('create')
+                  setCreateError(null)
+                  resetMenu()
+                  close()
+                  setCreateOpen(true)
                 }}
               >
                 Создать проект
@@ -346,6 +324,24 @@ export function AppHeaderMenu() {
         )
       }}
     </OverflowMenu>
+    {createOpen ? (
+      <div className="fixed inset-0 z-50 flex items-end justify-center overflow-y-auto bg-ink/40 p-4 sm:items-center">
+        <div className="my-4 w-full max-w-md rounded-2xl bg-white p-5 shadow-lg">
+          <h2 className="mb-4 text-lg font-semibold text-ink">Новый проект</h2>
+          <ProjectCreateWizard
+            submitting={busy}
+            error={createError}
+            onCancel={() => {
+              if (busy) return
+              setCreateOpen(false)
+              setCreateError(null)
+            }}
+            onCreate={(name, templates) => void handleCreateProject(name, templates)}
+          />
+        </div>
+      </div>
+    ) : null}
+    </>
   )
 }
 

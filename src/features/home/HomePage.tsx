@@ -1,3 +1,4 @@
+import { Link } from 'react-router-dom'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { useAuth } from '../auth/AuthProvider'
 import { ProgressBar } from '../../core/ui/ProgressBar'
@@ -41,6 +42,15 @@ export function HomePage() {
       </div>
 
       {activeProjectId ? <HomeBudgetCard projectId={activeProjectId} /> : null}
+
+      <Link
+        to="/guests"
+        className="block rounded-2xl border border-cream-dark bg-surface px-4 py-3 shadow-sm hover:bg-cream/30"
+      >
+        <p className="font-label text-[10px] font-medium uppercase tracking-wide text-coral">Гости</p>
+        <p className="mt-1 text-sm font-medium text-ink">Список гостей и RSVP</p>
+        <p className="mt-1 text-xs text-muted">Открыть раздел</p>
+      </Link>
     </div>
   )
 }

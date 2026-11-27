@@ -73,6 +73,7 @@ export function CanvasMoodBoard({ projectId, categoryId, allowCards = false }: C
   const multiSelectModeRef = useRef(false)
   const longPressTimerRef = useRef<number | null>(null)
   const longPressFiredRef = useRef(false)
+  const pendingSelectIdRef = useRef<string | null>(null)
   const listRef = useRef<MoodItem[]>([])
   const [editingId, setEditingId] = useState<string | null>(null)
   const [cropMode, setCropMode] = useState(false)
@@ -279,6 +280,31 @@ export function CanvasMoodBoard({ projectId, categoryId, allowCards = false }: C
     return next
   }
 
+  function shiftLayer(ids: string[], direction: 'front' | 'back') {
+    const unique = ids.filter((id) => list.some((entry) => entry.id === id))
+    if (unique.length === 0) return
+    const ordered = [...unique].sort((a, b) => {
+      const itemA = list.find((entry) => entry.id === a)
+      const itemB = list.find((entry) => entry.id === b)
+      if (!itemA || !itemB) return 0
+      return layoutOf(itemA).z - layoutOf(itemB).z
+    })
+    const maxZ = list.reduce((max, entry) => Math.max(max, layoutOf(entry).z), 0)
+    const minZ = list.reduce((min, entry) => Math.min(min, layoutOf(entry).z), 0)
+    const updates = { ...draftsRef.current }
+    ordered.forEach((id, index) => {
+      const entry = list.find((row) => row.id === id)
+      if (!entry) return
+      const current = updates[id] ?? entry.canvas
+      const z = direction === 'front' ? maxZ + 1 + index : minZ - ordered.length + index
+      const next = { ...current, z }
+      updates[id] = next
+      persistCanvas(id, next)
+    })
+    draftsRef.current = updates
+    setDrafts(updates)
+  }
+
   function onViewportPointerDown(event: ReactPointerEvent<HTMLDivElement>) {
     if (event.button !== 0) return
     rememberPointer(event.pointerId, event.clientX, event.clientY)
@@ -288,6 +314,7 @@ export function CanvasMoodBoard({ projectId, categoryId, allowCards = false }: C
       return
     }
     if (event.target !== event.currentTarget && !(event.target as HTMLElement).dataset?.board) return
+    pendingSelectIdRef.current = null
     if (cropMode && primaryId) {
       const canvas = draftsRef.current[primaryId]
       if (canvas) persistCanvas(primaryId, canvas)
@@ -425,7 +452,20 @@ export function CanvasMoodBoard({ projectId, categoryId, allowCards = false }: C
     }
     const gesture = gestureRef.current
     gestureRef.current = null
+    if (gesture?.type === 'pan') {
+      const pendingId = pendingSelectIdRef.current
+      pendingSelectIdRef.current = null
+      if (movedRef.current || longPressFiredRef.current || !pendingId) return
+      const pending = list.find((entry) => entry.id === pendingId)
+      if (!pending) return
+      setSelectedIds([pending.id])
+      multiSelectModeRef.current = false
+      setCropMode(false)
+      setEditingId(pending.kind === 'note' ? pending.id : null)
+      return
+    }
     if (gesture?.type !== 'item') return
+    pendingSelectIdRef.current = null
     const idsToPersist =
       gesture.mode === 'move' && selectedIdsRef.current.includes(gesture.id)
         ? selectedIdsRef.current
@@ -461,6 +501,7 @@ export function CanvasMoodBoard({ projectId, categoryId, allowCards = false }: C
     rememberPointer(event.pointerId, event.clientX, event.clientY)
     viewportRef.current?.setPointerCapture(event.pointerId)
     if (pointersRef.current.size >= 2) {
+      pendingSelectIdRef.current = null
       beginPinch()
       return
     }
@@ -469,6 +510,37 @@ export function CanvasMoodBoard({ projectId, categoryId, allowCards = false }: C
     clearLongPressTimer()
     const modifier = event.ctrlKey || event.metaKey || event.shiftKey
     const alreadySelected = selectedIdsRef.current.includes(item.id)
+    if (mode === 'move' && !alreadySelected && !modifier && !multiSelectModeRef.current) {
+      pendingSelectIdRef.current = item.id
+      setAttachOpen(false)
+      const slop = pointerSlop(event.pointerType)
+      gestureRef.current = {
+        type: 'pan',
+        lastX: event.clientX,
+        lastY: event.clientY,
+        originX: event.clientX,
+        originY: event.clientY,
+        started: false,
+        slop,
+      }
+      if (event.pointerType === 'touch' || event.pointerType === 'pen') {
+        longPressTimerRef.current = window.setTimeout(() => {
+          longPressFiredRef.current = true
+          pendingSelectIdRef.current = null
+          multiSelectModeRef.current = true
+          setEditingId(null)
+          setCropMode(false)
+          setSelectedIds((current) => (current.includes(item.id) ? current : [...current, item.id]))
+          try {
+            navigator.vibrate?.(12)
+          } catch {
+            /* ignore */
+          }
+        }, 480)
+      }
+      return
+    }
+    pendingSelectIdRef.current = null
     const isTouch = event.pointerType === 'touch' || event.pointerType === 'pen'
     if (!alreadySelected) setCropMode(false)
     setAttachOpen(false)
@@ -522,14 +594,13 @@ export function CanvasMoodBoard({ projectId, categoryId, allowCards = false }: C
   }
 
   async function handleFiles(files: FileList | null) {
-    const file = files?.[0]
-    if (!file) return
+    if (!files?.length) return
     setError(null)
     setSubmitting(true)
     try {
-      const item = await moodRepository.addImage(projectId, categoryId, file, '')
-      setSelectedIds([item.id])
-      multiSelectModeRef.current = false
+      const added = await moodRepository.addImages(projectId, categoryId, Array.from(files))
+      setSelectedIds(added.map((item) => item.id))
+      multiSelectModeRef.current = added.length > 1
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Не удалось загрузить фото')
     } finally {
@@ -652,6 +723,7 @@ export function CanvasMoodBoard({ projectId, categoryId, allowCards = false }: C
         ref={fileInputRef}
         type="file"
         accept="image/jpeg,image/png,image/webp,image/gif"
+        multiple
         className="sr-only"
         onChange={(e) => void handleFiles(e.target.files)}
       />
@@ -797,6 +869,8 @@ export function CanvasMoodBoard({ projectId, categoryId, allowCards = false }: C
               draftsRef.current = updates
               setDrafts(updates)
             }}
+            onBringToFront={() => shiftLayer(selectedIds, 'front')}
+            onSendToBack={() => shiftLayer(selectedIds, 'back')}
           />
         ) : selected ? (
           <CanvasItemToolbar
@@ -847,6 +921,8 @@ export function CanvasMoodBoard({ projectId, categoryId, allowCards = false }: C
               setDrafts(draftsRef.current)
               persistCanvas(selected.id, next)
             }}
+            onBringToFront={() => shiftLayer([selected.id], 'front')}
+            onSendToBack={() => shiftLayer([selected.id], 'back')}
           />
         ) : (
           <CanvasCreateBar
@@ -1358,7 +1434,7 @@ function CanvasCreateBar({
       <div className="relative flex items-center gap-5 rounded-full bg-white px-6 py-2.5 shadow-[0_8px_24px_rgb(0_0_0_/_0.10)]">
         {attachOpen ? (
           <div className="absolute bottom-full left-1/2 mb-3 w-[min(18.5rem,calc(100vw-2rem))] -translate-x-1/2 overflow-hidden rounded-[1.35rem] bg-white py-1 shadow-[0_12px_40px_rgb(0_0_0_/_0.14)]">
-            <AttachMenuRow icon={<IconGallery />} label="Выбрать фото или видео" onClick={onPhoto} />
+            <AttachMenuRow icon={<IconGallery />} label="Выбрать фото" onClick={onPhoto} />
             <AttachMenuRow icon={<IconCamera />} label="Снять фото или видео" onClick={onCamera} />
             <div className="mx-4 my-1 border-t border-black/10" />
             <AttachMenuRow icon={<IconLink />} label="Добавить ссылку" onClick={onLink} />
@@ -1492,6 +1568,8 @@ function CanvasItemToolbar({
   onDelete,
   onResetCrop,
   onResetRotation,
+  onBringToFront,
+  onSendToBack,
 }: {
   kind: MoodItem['kind']
   cropMode: boolean
@@ -1503,6 +1581,8 @@ function CanvasItemToolbar({
   onDelete: () => void
   onResetCrop: () => void
   onResetRotation: () => void
+  onBringToFront: () => void
+  onSendToBack: () => void
 }) {
   const showMediaTools = kind === 'image' && !hideMediaTools
   return (
@@ -1538,11 +1618,28 @@ function CanvasItemToolbar({
         </ToolbarIconButton>
         <OverflowMenu
           ariaLabel="Ещё"
-          widthClass="w-44"
+          placement="top"
+          widthClass="w-52"
           triggerClassName="flex size-9 items-center justify-center rounded-full text-lg leading-none text-ink hover:bg-cream"
         >
           {(close) => (
             <>
+              <OverflowMenuItem
+                onClick={() => {
+                  close()
+                  onBringToFront()
+                }}
+              >
+                На передний план
+              </OverflowMenuItem>
+              <OverflowMenuItem
+                onClick={() => {
+                  close()
+                  onSendToBack()
+                }}
+              >
+                На задний план
+              </OverflowMenuItem>
               {showMediaTools ? (
                 <OverflowMenuItem
                   onClick={() => {

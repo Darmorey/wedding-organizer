@@ -8,28 +8,35 @@ import {
   mapMoodItemToRow,
   mapTaskFromRow,
   mapTaskToRow,
+  mapTimelineEventFromRow,
+  mapTimelineEventToRow,
   type CategoryRow,
   type GuestRow,
   type MoodItemRow,
   type TaskRow,
+  type TimelineEventRow,
 } from '../supabase/mappers'
 import type { SyncTable } from '../../core/types/entity'
 import { db } from '../db/database'
 import { mergeRecords } from './merge'
 
 export async function pullProjectData(projectId: string): Promise<void> {
-  const [categoriesResult, tasksResult, guestsResult, moodResult] = await Promise.all([
+  const [categoriesResult, tasksResult, guestsResult, moodResult, timelineResult] = await Promise.all([
     supabase.from('categories').select('*').eq('project_id', projectId),
     supabase.from('tasks').select('*').eq('project_id', projectId),
     supabase.from('guests').select('*').eq('project_id', projectId),
     supabase.from('mood_items').select('*').eq('project_id', projectId),
+    supabase.from('timeline_events').select('*').eq('project_id', projectId),
   ])
 
   if (categoriesResult.error) throw categoriesResult.error
   if (tasksResult.error) throw tasksResult.error
   if (guestsResult.error) throw guestsResult.error
-  if (moodResult.error && !isMissingTableError(moodResult.error.message)) {
+  if (moodResult.error && !isMissingTableError(moodResult.error.message, 'mood_items')) {
     throw moodResult.error
+  }
+  if (timelineResult.error && !isMissingTableError(timelineResult.error.message, 'timeline_events')) {
+    throw timelineResult.error
   }
 
   const remoteCategories = (categoriesResult.data as CategoryRow[]).map(mapCategoryFromRow)
@@ -38,23 +45,37 @@ export async function pullProjectData(projectId: string): Promise<void> {
   const remoteMood = moodResult.error
     ? []
     : (moodResult.data as MoodItemRow[]).map(mapMoodItemFromRow)
+  const remoteTimeline = timelineResult.error
+    ? []
+    : (timelineResult.data as TimelineEventRow[]).map(mapTimelineEventFromRow)
 
   const localCategories = await db.categories.where('projectId').equals(projectId).toArray()
   const localTasks = await db.tasks.where('projectId').equals(projectId).toArray()
   const localGuests = await db.guests.where('projectId').equals(projectId).toArray()
   const localMood = await db.moodItems.where('projectId').equals(projectId).toArray()
+  const localTimeline = await db.timelineEvents.where('projectId').equals(projectId).toArray()
 
   const mergedCategories = mergeRecords(localCategories, remoteCategories)
   const mergedTasks = mergeRecords(localTasks, remoteTasks)
   const mergedGuests = mergeRecords(localGuests, remoteGuests)
   const mergedMood = mergeRecords(localMood, remoteMood)
+  const mergedTimeline = mergeRecords(localTimeline, remoteTimeline)
 
-  await db.transaction('rw', db.categories, db.tasks, db.guests, db.moodItems, async () => {
-    await db.categories.bulkPut(mergedCategories)
-    await db.tasks.bulkPut(mergedTasks)
-    await db.guests.bulkPut(mergedGuests)
-    await db.moodItems.bulkPut(mergedMood)
-  })
+  await db.transaction(
+    'rw',
+    db.categories,
+    db.tasks,
+    db.guests,
+    db.moodItems,
+    db.timelineEvents,
+    async () => {
+      await db.categories.bulkPut(mergedCategories)
+      await db.tasks.bulkPut(mergedTasks)
+      await db.guests.bulkPut(mergedGuests)
+      await db.moodItems.bulkPut(mergedMood)
+      await db.timelineEvents.bulkPut(mergedTimeline)
+    },
+  )
 }
 
 export async function pushQueueItem(
@@ -89,6 +110,16 @@ export async function pushQueueItem(
     return
   }
 
+  if (tableName === 'timeline_events') {
+    const event = await db.timelineEvents.get(entityId)
+    if (!event || event.projectId !== projectId) return
+
+    const { error } = await supabase.from('timeline_events').upsert(mapTimelineEventToRow(event))
+    if (error && isMissingTableError(error.message, 'timeline_events')) return
+    if (error) throw error
+    return
+  }
+
   const guest = await db.guests.get(entityId)
   if (!guest || guest.projectId !== projectId) return
 
@@ -109,9 +140,9 @@ export async function pushProjectQueue(projectId: string): Promise<number> {
   return processed
 }
 
-function isMissingTableError(message: string): boolean {
+function isMissingTableError(message: string, tableName: string): boolean {
   return (
-    message.includes('mood_items') &&
+    message.includes(tableName) &&
     (message.includes('does not exist') || message.includes('schema cache') || message.includes('PGRST'))
   )
 }

@@ -42,13 +42,13 @@ export function AppShell() {
       <nav className="sticky bottom-0 border-t border-cream-dark/80 bg-surface/95 px-4 py-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] backdrop-blur-md">
         <ul className="flex justify-around">
           {MAIN_NAV.map((item) => (
-            <li key={item.path}>
+            <li key={item.path} className="flex min-w-0 flex-1 justify-center">
               <NavLink
                 to={item.path}
                 end={item.path === '/'}
                 className={({ isActive }) =>
                   [
-                    'flex min-w-20 flex-col items-center rounded-full px-3 py-2 text-xs font-medium transition-colors',
+                    'flex min-w-0 flex-1 flex-col items-center rounded-full px-2 py-2 text-xs font-medium transition-colors',
                     isActive
                       ? 'bg-accent text-white shadow-sm'
                       : 'text-muted hover:bg-white/70 hover:text-ink',

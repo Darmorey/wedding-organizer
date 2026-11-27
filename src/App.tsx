@@ -11,6 +11,8 @@ import { BudgetCategoryPage } from './features/budget/BudgetCategoryPage'
 import { CategoriesPage } from './features/categories/pages/CategoriesPage'
 import { CategoryDetailPage } from './features/categories/pages/CategoryDetailPage'
 import { GuestsPage } from './features/guests/pages/GuestsPage'
+import { DeadlinesPage } from './features/deadlines/DeadlinesPage'
+import { TimingPage } from './features/timing/TimingPage'
 import { ProtectedRoute, GuestRoute } from './core/routing/ProtectedRoute'
 import { AppShell } from './core/layout/AppShell'
 import { SyncProvider } from './data/sync/SyncProvider'
@@ -30,6 +32,8 @@ function App() {
                 <Route path="/budget/:categoryId" element={<BudgetCategoryPage />} />
                 <Route path="/categories" element={<CategoriesPage />} />
                 <Route path="/categories/:categoryId" element={<CategoryDetailPage />} />
+                <Route path="/deadlines" element={<DeadlinesPage />} />
+                <Route path="/timing" element={<TimingPage />} />
                 <Route path="/guests" element={<GuestsPage />} />
               </Route>
             </Route>

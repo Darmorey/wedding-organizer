@@ -44,6 +44,14 @@ export interface Task extends BaseEntity {
   sortOrder: number
 }
 
+export interface TimelineEvent extends BaseEntity {
+  title: string
+  startTime: string
+  endTime: string
+  note: string
+  sortOrder: number
+}
+
 export interface Guest extends BaseEntity {
   name: string
   guestGroup: string
@@ -102,7 +110,7 @@ export interface MoodItem extends BaseEntity {
   textStyle: MoodTextStyle
 }
 
-export type SyncTable = 'categories' | 'tasks' | 'guests' | 'mood_items'
+export type SyncTable = 'categories' | 'tasks' | 'guests' | 'mood_items' | 'timeline_events'
 
 export type SyncOperation = 'upsert' | 'delete'
 

@@ -7,6 +7,8 @@ import { useAuth } from '../AuthProvider'
 import { bootstrapNewProject, joinWeddingProject } from '../../../data/supabase/projectService'
 import { syncProject } from '../../../data/sync/syncEngine'
 import { translateAuthError } from '../utils/authErrors'
+import { ProjectCreateWizard } from '../../projects/ProjectCreateWizard'
+import type { CategoryTemplate } from '../../../core/config/templates'
 
 type Mode = 'create' | 'join'
 
@@ -14,7 +16,6 @@ export function OnboardingPage() {
   const navigate = useNavigate()
   const { session, loading, projects, refreshProjects, setActiveProjectId } = useAuth()
   const [mode, setMode] = useState<Mode>('create')
-  const [projectName, setProjectName] = useState('')
   const [inviteCode, setInviteCode] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
@@ -27,13 +28,12 @@ export function OnboardingPage() {
     return <Navigate to="/" replace />
   }
 
-  async function handleCreate(e: FormEvent) {
-    e.preventDefault()
+  async function handleCreate(name: string, templates: CategoryTemplate[] | null) {
     setError(null)
     setSubmitting(true)
 
     try {
-      const project = await bootstrapNewProject(projectName.trim())
+      const project = await bootstrapNewProject(name, templates)
       await refreshProjects()
       setActiveProjectId(project.id)
       navigate('/', { replace: true })
@@ -88,20 +88,7 @@ export function OnboardingPage() {
       </div>
 
       {mode === 'create' ? (
-        <form onSubmit={handleCreate} className="space-y-4">
-          <Input
-            label="Название проекта"
-            name="projectName"
-            placeholder="Например: Свадьба Анны и Ивана"
-            required
-            value={projectName}
-            onChange={(e) => setProjectName(e.target.value)}
-          />
-          {error ? <p className="text-sm text-red-600">{error}</p> : null}
-          <Button type="submit" fullWidth disabled={submitting}>
-            {submitting ? 'Создание…' : 'Создать проект'}
-          </Button>
-        </form>
+        <ProjectCreateWizard submitting={submitting} error={error} onCreate={(name, templates) => void handleCreate(name, templates)} />
       ) : (
         <form onSubmit={handleJoin} className="space-y-4">
           <Input

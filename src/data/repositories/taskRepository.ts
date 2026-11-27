@@ -1,5 +1,7 @@
 import type { Task } from '../../core/types/entity'
+import { type DeadlinePhase } from '../../core/config/deadlines'
 import { createId, nowIso } from '../../core/utils/id'
+import { taskParentId } from '../../core/utils/taskTree'
 import { db } from '../db/database'
 import { assertProjectId, enqueueSync } from './baseRepository'
 
@@ -14,10 +16,19 @@ export const taskRepository = {
     return rows.filter((row) => !row.deletedAt).sort((a, b) => a.sortOrder - b.sortOrder)
   },
 
-  async create(projectId: string, categoryId: string, title: string): Promise<Task> {
+  async create(
+    projectId: string,
+    categoryId: string,
+    title: string,
+    deadlinePhase: DeadlinePhase,
+    parentId?: string,
+  ): Promise<Task> {
     assertProjectId(projectId)
 
     const existing = await this.listByCategory(projectId, categoryId)
+    const siblings = parentId
+      ? existing.filter((task) => taskParentId(task) === parentId)
+      : existing.filter((task) => !taskParentId(task))
     const now = nowIso()
 
     const task: Task = {
@@ -26,8 +37,8 @@ export const taskRepository = {
       categoryId,
       title: title.trim(),
       done: false,
-      sortOrder: existing.length,
-      metadata: {},
+      sortOrder: siblings.length,
+      metadata: parentId ? { deadlinePhase, parentId } : { deadlinePhase },
       createdAt: now,
       updatedAt: now,
       deletedAt: null,
@@ -59,6 +70,24 @@ export const taskRepository = {
     return updated
   },
 
+  async updateDeadline(projectId: string, taskId: string, deadlinePhase: DeadlinePhase): Promise<Task> {
+    assertProjectId(projectId)
+    const task = await db.tasks.get(taskId)
+    if (!task || task.projectId !== projectId || task.deletedAt) {
+      throw new Error('Task not found')
+    }
+
+    const updated: Task = {
+      ...task,
+      metadata: { ...(task.metadata ?? {}), deadlinePhase },
+      updatedAt: nowIso(),
+    }
+
+    await db.tasks.put(updated)
+    await enqueueSync(projectId, 'tasks', taskId, 'upsert')
+    return updated
+  },
+
   async toggleDone(projectId: string, taskId: string): Promise<Task> {
     assertProjectId(projectId)
     const task = await db.tasks.get(taskId)
@@ -77,12 +106,13 @@ export const taskRepository = {
     return updated
   },
 
-  async reorder(projectId: string, categoryId: string, orderedIds: string[]): Promise<void> {
+  async reorder(projectId: string, categoryId: string, orderedIds: string[], parentId?: string): Promise<void> {
     assertProjectId(projectId)
     const tasks = await this.listByCategory(projectId, categoryId)
-    const byId = new Map(tasks.map((task) => [task.id, task]))
+    const group = tasks.filter((task) => taskParentId(task) === (parentId ?? null))
+    const byId = new Map(group.map((task) => [task.id, task]))
     const reordered = orderedIds.map((id) => byId.get(id)).filter((task): task is Task => Boolean(task))
-    if (reordered.length !== tasks.length) return
+    if (reordered.length !== group.length) return
 
     const now = nowIso()
     const changedIds: string[] = []
@@ -106,14 +136,18 @@ export const taskRepository = {
     const task = await db.tasks.get(taskId)
     if (!task || task.projectId !== projectId || task.deletedAt) return
 
-    const updated: Task = {
-      ...task,
-      updatedAt: nowIso(),
-      deletedAt: nowIso(),
-    }
+    const siblings = await this.listByCategory(projectId, task.categoryId)
+    const toRemove = [task, ...siblings.filter((entry) => taskParentId(entry) === taskId)]
+    const now = nowIso()
 
-    await db.tasks.put(updated)
-    await enqueueSync(projectId, 'tasks', taskId, 'upsert')
+    await db.transaction('rw', db.tasks, async () => {
+      for (const entry of toRemove) {
+        await db.tasks.put({ ...entry, updatedAt: now, deletedAt: now })
+      }
+    })
+    for (const entry of toRemove) {
+      await enqueueSync(projectId, 'tasks', entry.id, 'upsert')
+    }
   },
 }
 

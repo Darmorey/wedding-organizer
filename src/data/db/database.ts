@@ -1,11 +1,12 @@
 import Dexie, { type EntityTable } from 'dexie'
-import type { Category, Guest, MoodItem, SyncQueueItem, Task } from '../../core/types/entity'
+import type { Category, Guest, MoodItem, SyncQueueItem, Task, TimelineEvent } from '../../core/types/entity'
 
 export class WeddingDatabase extends Dexie {
   categories!: EntityTable<Category, 'id'>
   tasks!: EntityTable<Task, 'id'>
   guests!: EntityTable<Guest, 'id'>
   moodItems!: EntityTable<MoodItem, 'id'>
+  timelineEvents!: EntityTable<TimelineEvent, 'id'>
   syncQueue!: EntityTable<SyncQueueItem, 'id'>
 
   constructor() {
@@ -61,6 +62,16 @@ export class WeddingDatabase extends Dexie {
           }
         }
       })
+
+    this.version(5).stores({
+      categories: 'id, projectId, [projectId+sortOrder], updatedAt',
+      tasks:
+        'id, projectId, categoryId, [projectId+categoryId], [projectId+categoryId+sortOrder], updatedAt',
+      guests: 'id, projectId, rsvp, [projectId+rsvp], updatedAt',
+      moodItems: 'id, projectId, categoryId, [projectId+categoryId], updatedAt',
+      timelineEvents: 'id, projectId, [projectId+sortOrder], updatedAt',
+      syncQueue: 'id, projectId, entityId, [projectId+entityId]',
+    })
   }
 }
 

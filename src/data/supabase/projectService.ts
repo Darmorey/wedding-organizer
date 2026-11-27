@@ -1,5 +1,6 @@
 import { supabase } from '../supabase/client'
 import type { WeddingProject } from '../../core/types/entity'
+import { emptyCategoryTemplates, type CategoryTemplate } from '../../core/config/templates'
 import { purgeProjectLocalData } from '../local/purgeProjectLocalData'
 import { seedProjectCategories } from '../repositories/seedService'
 import { syncProject } from '../sync/syncEngine'
@@ -58,9 +59,12 @@ export async function createWeddingProject(name: string): Promise<WeddingProject
   }
 }
 
-export async function bootstrapNewProject(name: string): Promise<WeddingProject> {
+export async function bootstrapNewProject(
+  name: string,
+  templates: CategoryTemplate[] | null = null,
+): Promise<WeddingProject> {
   const project = await createWeddingProject(name)
-  await seedProjectCategories(project.id)
+  await seedProjectCategories(project.id, templates ?? emptyCategoryTemplates())
   await syncProject(project.id)
   return project
 }

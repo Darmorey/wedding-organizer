@@ -1,5 +1,5 @@
 import { defaultTextStyle, hydrateMoodItem, readCanvasLayout, withCanvasMetadata } from '../../core/config/moodCanvas'
-import type { Category, Guest, MoodItem, MoodKind, Task, UploadStatus } from '../../core/types/entity'
+import type { Category, Guest, MoodItem, MoodKind, Task, TimelineEvent, UploadStatus } from '../../core/types/entity'
 
 export interface CategoryRow {
   id: string
@@ -199,5 +199,51 @@ export function mapMoodItemToRow(item: MoodItem): MoodItemRow {
     created_at: item.createdAt,
     updated_at: item.updatedAt,
     deleted_at: item.deletedAt ?? null,
+  }
+}
+
+export interface TimelineEventRow {
+  id: string
+  project_id: string
+  title: string
+  start_time: string
+  end_time: string
+  note: string
+  sort_order: number
+  metadata: Record<string, unknown>
+  created_at: string
+  updated_at: string
+  deleted_at: string | null
+}
+
+export function mapTimelineEventFromRow(row: TimelineEventRow): TimelineEvent {
+  return {
+    id: row.id,
+    projectId: row.project_id,
+    title: row.title,
+    startTime: row.start_time ?? '',
+    endTime: row.end_time ?? '',
+    note: row.note ?? '',
+    sortOrder: row.sort_order ?? 0,
+    metadata: row.metadata ?? {},
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+    deletedAt: row.deleted_at,
+  }
+}
+
+export function mapTimelineEventToRow(event: TimelineEvent): TimelineEventRow {
+  return {
+    id: event.id,
+    project_id: event.projectId,
+    title: event.title,
+    start_time: event.startTime,
+    end_time: event.endTime,
+    note: event.note,
+    sort_order: event.sortOrder,
+    metadata: event.metadata ?? {},
+    created_at: event.createdAt,
+    updated_at: event.updatedAt,
+    deleted_at: event.deletedAt ?? null,
   }
 }

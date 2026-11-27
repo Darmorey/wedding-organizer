@@ -91,12 +91,11 @@ export function MoodBoard({ projectId, categoryId, variant = 'media' }: MoodBoar
   }
 
   async function handleFiles(files: FileList | null) {
-    const file = files?.[0]
-    if (!file) return
+    if (!files?.length) return
     setError(null)
     setSubmitting(true)
     try {
-      await moodRepository.addImage(projectId, categoryId, file, '')
+      await moodRepository.addImages(projectId, categoryId, Array.from(files))
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Не удалось загрузить фото')
     } finally {
@@ -172,6 +171,7 @@ export function MoodBoard({ projectId, categoryId, variant = 'media' }: MoodBoar
         ref={fileInputRef}
         type="file"
         accept="image/jpeg,image/png,image/webp,image/gif"
+        multiple
         className="sr-only"
         onChange={(e) => void handleFiles(e.target.files)}
       />
