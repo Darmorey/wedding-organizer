@@ -10,6 +10,7 @@ import {
   type ResizeHandle,
 } from '../../../core/config/moodCanvas'
 import type { MoodCanvasLayout, MoodItem, MoodTextStyle } from '../../../core/types/entity'
+import { formatMoneyInput, formatVenueBudget, venueCardFields } from '../../../core/config/moodboard'
 import { Button } from '../../../core/ui/Button'
 import { Input } from '../../../core/ui/Input'
 import { OverflowMenu, OverflowMenuItem } from '../../../core/ui/OverflowMenu'
@@ -19,6 +20,13 @@ import { signedMoodUrl } from '../../../data/supabase/storage'
 interface CanvasMoodBoardProps {
   projectId: string
   categoryId: string
+  allowCards?: boolean
+}
+
+const CARD_FOOTER = 48
+
+function isPlaceCard(item: MoodItem) {
+  return item.metadata?.placeCard === true
 }
 
 const MIN_ZOOM = 0.25
@@ -26,7 +34,7 @@ const MAX_ZOOM = 3.2
 const POINTER_SLOP_MOUSE = 3
 const POINTER_SLOP_TOUCH = 12
 
-export function CanvasMoodBoard({ projectId, categoryId }: CanvasMoodBoardProps) {
+export function CanvasMoodBoard({ projectId, categoryId, allowCards = false }: CanvasMoodBoardProps) {
   const fileInputRef = useRef<HTMLInputElement>(null)
   const cameraInputRef = useRef<HTMLInputElement>(null)
   const viewportRef = useRef<HTMLDivElement>(null)
@@ -74,6 +82,12 @@ export function CanvasMoodBoard({ projectId, categoryId }: CanvasMoodBoardProps)
   draftsRef.current = drafts
   const [attachOpen, setAttachOpen] = useState(false)
   const [linkOpen, setLinkOpen] = useState(false)
+  const [placeOpen, setPlaceOpen] = useState(false)
+  const [editingPlace, setEditingPlace] = useState<MoodItem | null>(null)
+  const [placeFile, setPlaceFile] = useState<File | null>(null)
+  const [placeName, setPlaceName] = useState('')
+  const [placeBudget, setPlaceBudget] = useState('')
+  const [placeComment, setPlaceComment] = useState('')
   const [url, setUrl] = useState('')
   const [caption, setCaption] = useState('')
   const [error, setError] = useState<string | null>(null)
@@ -120,7 +134,7 @@ export function CanvasMoodBoard({ projectId, categoryId }: CanvasMoodBoardProps)
       const ids = selectedIdsRef.current
       const selected =
         ids.length === 1 ? listRef.current.find((entry) => entry.id === ids[0]) : undefined
-      if (selected?.kind === 'image') {
+      if (selected?.kind === 'image' && !isPlaceCard(selected)) {
         const current = draftsRef.current[selected.id] ?? selected.canvas
         const imageZoom = Math.min(5, Math.max(1, (current.imageZoom || 1) * (event.deltaY > 0 ? 0.92 : 1.08)))
         const next = { ...current, imageZoom }
@@ -571,6 +585,67 @@ export function CanvasMoodBoard({ projectId, categoryId }: CanvasMoodBoardProps)
     }
   }
 
+  function openPlaceSheet(item?: MoodItem) {
+    setAttachOpen(false)
+    setError(null)
+    setPlaceFile(null)
+    if (item) {
+      const fields = venueCardFields(item)
+      setEditingPlace(item)
+      setPlaceName(fields.place)
+      setPlaceBudget(formatMoneyInput(fields.budget))
+      setPlaceComment(fields.comment)
+      setUrl(fields.url)
+    } else {
+      setEditingPlace(null)
+      setPlaceName('')
+      setPlaceBudget('')
+      setPlaceComment('')
+      setUrl('')
+    }
+    setPlaceOpen(true)
+  }
+
+  async function handleSavePlace() {
+    if (!placeName.trim()) {
+      setError('Укажите название')
+      return
+    }
+    setError(null)
+    setSubmitting(true)
+    try {
+      const fields = {
+        place: placeName,
+        budget: formatMoneyInput(placeBudget),
+        details: '',
+        comment: placeComment,
+        url,
+      }
+      if (editingPlace) {
+        await moodRepository.updateVenue(projectId, editingPlace.id, placeFile, fields)
+        setSelectedIds([editingPlace.id])
+      } else {
+        const created = await moodRepository.addVenue(projectId, categoryId, placeFile, fields)
+        const z = list.reduce((max, entry) => Math.max(max, layoutOf(entry).z), 0) + 1
+        await moodRepository.updateCanvas(projectId, created.id, {
+          ...created.canvas,
+          width: 188,
+          height: 268,
+          z,
+        })
+        setSelectedIds([created.id])
+      }
+      multiSelectModeRef.current = false
+      setPlaceOpen(false)
+      setEditingPlace(null)
+      setPlaceFile(null)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Не удалось сохранить карточку')
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
   return (
     <div className="relative -mx-6 overflow-hidden">
       <input
@@ -630,7 +705,7 @@ export function CanvasMoodBoard({ projectId, categoryId }: CanvasMoodBoardProps)
               selected={selectedIds.includes(item.id)}
               showHandles={!multiSelected && selectedIds.includes(item.id)}
               editing={editingId === item.id}
-              cropMode={cropMode && primaryId === item.id && !multiSelected}
+              cropMode={cropMode && primaryId === item.id && !multiSelected && !isPlaceCard(item)}
               onMovePointerDown={(event) => startItemGesture(event, item, 'move')}
               onCropPointerDown={(event) => startItemGesture(event, item, 'crop')}
               onRotatePointerDown={(event) => startItemGesture(event, item, 'rotate')}
@@ -656,9 +731,9 @@ export function CanvasMoodBoard({ projectId, categoryId }: CanvasMoodBoardProps)
                   mediaWidth: naturalWidth,
                   mediaHeight: naturalHeight,
                   height:
-                    !current.mediaWidth && Math.abs(current.height - 210) <= 8
-                      ? Math.round(current.width * (naturalHeight / naturalWidth))
-                      : current.height,
+                    isPlaceCard(item) || current.mediaWidth || Math.abs(current.height - 210) > 8
+                      ? current.height
+                      : Math.round(current.width * (naturalHeight / naturalWidth)),
                 }
                 draftsRef.current = { ...draftsRef.current, [item.id]: next }
                 setDrafts(draftsRef.current)
@@ -670,7 +745,9 @@ export function CanvasMoodBoard({ projectId, categoryId }: CanvasMoodBoardProps)
 
         {list.length === 0 ? (
           <p className="pointer-events-none absolute inset-x-8 top-1/2 -translate-y-1/2 text-center text-sm text-muted">
-            Свободное поле: добавьте фото или запись и расставьте как угодно.
+            {allowCards
+              ? 'Свободное поле: фото, записи и карточки со стоимостью — расставьте как угодно.'
+              : 'Свободное поле: добавьте фото или запись и расставьте как угодно.'}
           </p>
         ) : null}
 
@@ -725,8 +802,13 @@ export function CanvasMoodBoard({ projectId, categoryId }: CanvasMoodBoardProps)
           <CanvasItemToolbar
             kind={selected.kind}
             cropMode={cropMode}
+            hideMediaTools={isPlaceCard(selected)}
             extra={
-              selected.kind === 'note' ? (
+              isPlaceCard(selected) ? (
+                <ToolbarIconButton label="Изменить карточку" onClick={() => openPlaceSheet(selected)}>
+                  <IconPencil />
+                </ToolbarIconButton>
+              ) : selected.kind === 'note' ? (
                 <TextFormatTools
                   style={selected.textStyle ?? defaultTextStyle()}
                   onChange={(textStyle) => {
@@ -736,7 +818,10 @@ export function CanvasMoodBoard({ projectId, categoryId }: CanvasMoodBoardProps)
               ) : null
             }
             onReplace={() => replaceInputRef.current?.click()}
-            onCrop={() => setCropMode((value) => !value)}
+            onCrop={() => {
+              if (isPlaceCard(selected)) return
+              setCropMode((value) => !value)
+            }}
             onDuplicate={() => {
               moodRepository.duplicate(projectId, selected.id).then((copy) => {
                 if (copy) {
@@ -766,6 +851,7 @@ export function CanvasMoodBoard({ projectId, categoryId }: CanvasMoodBoardProps)
         ) : (
           <CanvasCreateBar
             attachOpen={attachOpen}
+            allowCards={allowCards}
             onMarker={() => void handleAddNote()}
             onText={() => void handleAddNote()}
             onToggleAttach={() => setAttachOpen((open) => !open)}
@@ -784,6 +870,7 @@ export function CanvasMoodBoard({ projectId, categoryId }: CanvasMoodBoardProps)
               setCaption('')
               setLinkOpen(true)
             }}
+            onCard={() => openPlaceSheet()}
           />
         )}
       </div>
@@ -808,6 +895,166 @@ export function CanvasMoodBoard({ projectId, categoryId }: CanvasMoodBoardProps)
           </div>
         </div>
       ) : null}
+
+      {placeOpen ? (
+        <CanvasPlaceSheet
+          editing={Boolean(editingPlace)}
+          placeName={placeName}
+          budget={placeBudget}
+          comment={placeComment}
+          url={url}
+          file={placeFile}
+          existingPhoto={Boolean(editingPlace?.storagePath)}
+          error={error}
+          submitting={submitting}
+          onPlaceName={setPlaceName}
+          onBudget={setPlaceBudget}
+          onComment={setPlaceComment}
+          onUrl={setUrl}
+          onFile={setPlaceFile}
+          onClose={() => {
+            setPlaceOpen(false)
+            setError(null)
+          }}
+          onSave={() => void handleSavePlace()}
+        />
+      ) : null}
+    </div>
+  )
+}
+
+function CanvasPlaceSheet({
+  editing,
+  placeName,
+  budget,
+  comment,
+  url,
+  file,
+  existingPhoto,
+  error,
+  submitting,
+  onPlaceName,
+  onBudget,
+  onComment,
+  onUrl,
+  onFile,
+  onClose,
+  onSave,
+}: {
+  editing: boolean
+  placeName: string
+  budget: string
+  comment: string
+  url: string
+  file: File | null
+  existingPhoto: boolean
+  error: string | null
+  submitting: boolean
+  onPlaceName: (value: string) => void
+  onBudget: (value: string) => void
+  onComment: (value: string) => void
+  onUrl: (value: string) => void
+  onFile: (file: File | null) => void
+  onClose: () => void
+  onSave: () => void
+}) {
+  const photoRef = useRef<HTMLInputElement>(null)
+  const preview = file ? URL.createObjectURL(file) : null
+
+  useEffect(() => {
+    return () => {
+      if (preview) URL.revokeObjectURL(preview)
+    }
+  }, [preview])
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-end justify-center bg-ink/40 p-4 sm:items-center" onClick={onClose}>
+      <div className="w-full max-w-md rounded-2xl bg-white p-5 shadow-lg" onClick={(event) => event.stopPropagation()}>
+        <h3 className="mb-4 text-lg font-semibold text-ink">{editing ? 'Карточка' : 'Добавить карточку'}</h3>
+        <div className="space-y-3">
+          <input
+            ref={photoRef}
+            type="file"
+            accept="image/jpeg,image/png,image/webp,image/gif"
+            className="sr-only"
+            onChange={(event) => onFile(event.target.files?.[0] ?? null)}
+          />
+          <button
+            type="button"
+            onClick={() => photoRef.current?.click()}
+            className="flex w-full items-center justify-center rounded-xl border border-dashed border-cream-dark bg-cream/50 px-3 py-4 text-sm text-accent-dark"
+          >
+            {file ? file.name : existingPhoto ? 'Заменить фото' : 'Добавить фото'}
+          </button>
+          {preview ? <img src={preview} alt="" className="max-h-40 w-full rounded-xl object-cover" /> : null}
+          <Input
+            label="Название"
+            name="cardName"
+            placeholder="Композиция, декор, цветы"
+            autoFocus
+            value={placeName}
+            onChange={(event) => onPlaceName(event.target.value)}
+          />
+          <Input
+            label="Стоимость"
+            name="cardBudget"
+            inputMode="numeric"
+            placeholder="40 000"
+            suffix="₽"
+            value={budget}
+            onChange={(event) => {
+              const input = event.target
+              const digitsBefore = input.value.slice(0, input.selectionStart ?? 0).replace(/\D/g, '').length
+              const next = formatMoneyInput(input.value)
+              onBudget(next)
+              requestAnimationFrame(() => {
+                let seen = 0
+                let pos = next.length
+                for (let i = 0; i < next.length; i++) {
+                  if (/\d/.test(next[i])) {
+                    seen += 1
+                    if (seen >= digitsBefore) {
+                      pos = i + 1
+                      break
+                    }
+                  }
+                }
+                if (digitsBefore === 0) pos = 0
+                input.setSelectionRange(pos, pos)
+              })
+            }}
+          />
+          <label htmlFor="cardComment" className="block">
+            <span className="mb-1.5 block text-sm font-medium text-ink">Комментарий</span>
+            <textarea
+              id="cardComment"
+              name="cardComment"
+              rows={3}
+              placeholder="Заметка о декоре"
+              value={comment}
+              onChange={(event) => onComment(event.target.value)}
+              className="w-full resize-y rounded-xl border border-cream-dark bg-white px-3 py-2.5 text-ink placeholder:text-muted focus:border-accent focus:outline-none focus:ring-2 focus:ring-accent/20"
+            />
+          </label>
+          <Input
+            label="Ссылка"
+            name="cardUrl"
+            type="url"
+            placeholder="https://…"
+            value={url}
+            onChange={(event) => onUrl(event.target.value)}
+          />
+          {error ? <p className="text-sm text-red-600">{error}</p> : null}
+          <div className="flex gap-2">
+            <Button variant="secondary" fullWidth onClick={onClose}>
+              Отмена
+            </Button>
+            <Button fullWidth disabled={submitting || !placeName.trim()} onClick={onSave}>
+              {submitting ? 'Сохранение…' : editing ? 'Сохранить' : 'Добавить'}
+            </Button>
+          </div>
+        </div>
+      </div>
     </div>
   )
 }
@@ -1084,20 +1331,24 @@ function pressAction(handler: () => void) {
 
 function CanvasCreateBar({
   attachOpen,
+  allowCards,
   onMarker,
   onText,
   onToggleAttach,
   onPhoto,
   onCamera,
   onLink,
+  onCard,
 }: {
   attachOpen: boolean
+  allowCards?: boolean
   onMarker: () => void
   onText: () => void
   onToggleAttach: () => void
   onPhoto: () => void
   onCamera: () => void
   onLink: () => void
+  onCard?: () => void
 }) {
   return (
     <div
@@ -1111,6 +1362,7 @@ function CanvasCreateBar({
             <AttachMenuRow icon={<IconCamera />} label="Снять фото или видео" onClick={onCamera} />
             <div className="mx-4 my-1 border-t border-black/10" />
             <AttachMenuRow icon={<IconLink />} label="Добавить ссылку" onClick={onLink} />
+            {allowCards && onCard ? <AttachMenuRow icon={<IconCard />} label="Добавить карточку" onClick={onCard} /> : null}
           </div>
         ) : null}
         <button type="button" aria-label="Маркер" className="flex size-9 items-center justify-center text-ink" onClick={onMarker}>
@@ -1210,9 +1462,29 @@ function IconLink() {
   )
 }
 
+function IconCard() {
+  return (
+    <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinejoin="round">
+      <rect x="4" y="4.5" width="16" height="15" rx="2" />
+      <path d="M4 14.5h16" />
+      <path d="M7 17.5h4" />
+      <path d="M14.5 17.5h2.5" />
+    </svg>
+  )
+}
+
+function IconPencil() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+      <path d="M12.4 4.4 15.6 7.6M3.5 16.5l3.1-.6 8.4-8.4a1.8 1.8 0 0 0 0-2.5l-.9-.9a1.8 1.8 0 0 0-2.5 0L3.2 12.5l-.7 4z" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  )
+}
+
 function CanvasItemToolbar({
   kind,
   cropMode,
+  hideMediaTools,
   extra,
   onReplace,
   onCrop,
@@ -1223,6 +1495,7 @@ function CanvasItemToolbar({
 }: {
   kind: MoodItem['kind']
   cropMode: boolean
+  hideMediaTools?: boolean
   extra?: ReactNode
   onReplace: () => void
   onCrop: () => void
@@ -1231,6 +1504,7 @@ function CanvasItemToolbar({
   onResetCrop: () => void
   onResetRotation: () => void
 }) {
+  const showMediaTools = kind === 'image' && !hideMediaTools
   return (
     <div
       className="absolute inset-x-4 bottom-3 z-30 flex justify-center"
@@ -1243,17 +1517,17 @@ function CanvasItemToolbar({
     >
       <div className="flex max-w-full flex-wrap items-center justify-center gap-0.5 rounded-full bg-white px-2 py-1.5 shadow-[0_8px_24px_rgb(0_0_0_/_0.12)]">
         {extra}
-        {kind === 'image' ? (
+        {showMediaTools ? (
           <ToolbarIconButton label="Заменить фото" onClick={onReplace}>
             <IconPhoto />
           </ToolbarIconButton>
         ) : null}
-        {kind === 'image' ? (
+        {showMediaTools ? (
           <ToolbarIconButton label="Обрезать" active={cropMode} onClick={onCrop}>
             <IconCrop />
           </ToolbarIconButton>
         ) : null}
-        {extra || kind === 'image' ? (
+        {extra || showMediaTools ? (
           <span className="mx-1 select-none text-sm leading-none text-muted/50">|</span>
         ) : null}
         <ToolbarIconButton label="Дублировать" onClick={onDuplicate}>
@@ -1269,7 +1543,7 @@ function CanvasItemToolbar({
         >
           {(close) => (
             <>
-              {kind === 'image' ? (
+              {showMediaTools ? (
                 <OverflowMenuItem
                   onClick={() => {
                     close()
@@ -1425,6 +1699,7 @@ function CanvasCard({
   }, [editing])
 
   useLayoutEffect(() => {
+    if (isPlaceCard(item)) return
     if (item.kind !== 'note' && item.kind !== 'link') return
     const node = noteRef.current
     if (!node) return
@@ -1449,20 +1724,23 @@ function CanvasCard({
     }
   }, [item.kind, item.storagePath])
 
-  const draw = item.kind === 'image' ? imageDrawRect(layout) : null
+  const placeCard = isPlaceCard(item)
+  const mediaHeight = placeCard ? Math.max(80, layout.height - CARD_FOOTER) : layout.height
+  const draw = item.kind === 'image' ? imageDrawRect({ ...layout, height: mediaHeight }) : null
   const textStyle = item.textStyle ?? defaultTextStyle()
+  const fields = placeCard ? venueCardFields(item) : null
 
   return (
     <article
       className={[
         'absolute origin-center',
-        item.kind === 'note'
-          ? textStyle.background === 'transparent'
-            ? 'shadow-none'
-            : 'shadow-md'
-          : item.kind === 'link'
-            ? 'bg-transparent shadow-none'
-            : 'bg-white shadow-md',
+        placeCard || item.kind === 'image'
+          ? 'bg-white shadow-md'
+          : item.kind === 'note'
+            ? textStyle.background === 'transparent'
+              ? 'shadow-none'
+              : 'shadow-md'
+            : 'bg-transparent shadow-none',
         selected && !cropMode ? 'outline outline-2 outline-[#7ec8f0]' : '',
       ].join(' ')}
       style={{
@@ -1481,7 +1759,7 @@ function CanvasCard({
 
       {item.kind === 'image' ? (
         src && draw ? (
-          <div className="relative h-full w-full overflow-hidden">
+          <div className="relative w-full overflow-hidden" style={{ height: mediaHeight }}>
             <img
               src={src}
               alt={item.caption || item.fileName}
@@ -1497,11 +1775,19 @@ function CanvasCard({
             />
           </div>
         ) : (
-          <div className="flex h-full items-center justify-center bg-cream text-xs text-muted">Фото</div>
+          <div className="flex items-center justify-center bg-cream text-xs text-muted" style={{ height: mediaHeight }}>
+            Фото
+          </div>
         )
       ) : null}
 
-      {item.kind === 'link' ? (
+      {placeCard && item.kind !== 'image' ? (
+        <div className="flex items-center justify-center bg-cream text-xs text-muted" style={{ height: mediaHeight }}>
+          Нет фото
+        </div>
+      ) : null}
+
+      {item.kind === 'link' && !placeCard ? (
         <p
           ref={(node) => {
             noteRef.current = node
@@ -1510,6 +1796,13 @@ function CanvasCard({
         >
           {item.caption.trim() || item.url.replace(/^https?:\/\//i, '')}
         </p>
+      ) : null}
+
+      {placeCard && fields ? (
+        <div className="flex h-12 items-baseline justify-between gap-2 px-2.5 py-2">
+          <p className="min-w-0 truncate text-xs font-medium text-ink">{fields.place || 'Карточка'}</p>
+          <p className="shrink-0 text-xs text-muted">{formatVenueBudget(fields.budget) || 'Стоимость'}</p>
+        </div>
       ) : null}
 
       {item.kind === 'note' ? (

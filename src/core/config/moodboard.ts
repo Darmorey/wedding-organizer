@@ -77,9 +77,13 @@ export function placeBoardCopy(name: string): PlaceBoardCopy | null {
 
 export function moodBoardMode(name: string): MoodBoardMode {
   const normalized = name.trim().toLowerCase()
-  if (normalized.includes('кейтеринг')) return 'canvas'
-  if (normalized.includes('декор') || placeBoardKind(name)) return 'grid'
+  if (normalized.includes('кейтеринг') || normalized.includes('декор')) return 'canvas'
+  if (placeBoardKind(name)) return 'grid'
   return 'none'
+}
+
+export function canvasAllowsCards(name: string): boolean {
+  return name.trim().toLowerCase().includes('декор')
 }
 
 export function categoryHasMoodBoard(name: string): boolean {

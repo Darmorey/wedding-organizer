@@ -9,7 +9,7 @@ import { MoodBoard } from '../components/MoodBoard'
 import { CanvasMoodBoard } from '../components/CanvasMoodBoard'
 import { AddButton } from '../../../core/ui/AddButton'
 import { ProgressBar } from '../../../core/ui/ProgressBar'
-import { moodBoardMode, placeBoardKind } from '../../../core/config/moodboard'
+import { canvasAllowsCards, moodBoardMode, placeBoardKind } from '../../../core/config/moodboard'
 import { examplesForCategory } from '../../../core/config/taskExamples'
 import { TaskExamplesPanel } from '../components/TaskExamplesPanel'
 
@@ -137,7 +137,11 @@ export function CategoryDetailPage() {
       ) : null}
 
       {showMoodBoard && tab === 'mood' && boardMode === 'canvas' ? (
-        <CanvasMoodBoard projectId={activeProjectId} categoryId={categoryId} />
+        <CanvasMoodBoard
+          projectId={activeProjectId}
+          categoryId={categoryId}
+          allowCards={canvasAllowsCards(category.name)}
+        />
       ) : showMoodBoard && tab === 'mood' ? (
         <MoodBoard
           projectId={activeProjectId}
