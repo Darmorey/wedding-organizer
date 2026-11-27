@@ -762,7 +762,7 @@ function MoodGrid({
     onReorder(orderRef.current)
   }
 
-  function handlePointerDown(event: ReactPointerEvent<HTMLLIElement>, itemId: string) {
+  function handlePointerDown(event: ReactPointerEvent<HTMLElement>, itemId: string) {
     if (event.button !== 0) return
     const target = event.target
     if (target instanceof Element && target.closest('[data-no-drag]')) return

@@ -14,7 +14,6 @@ import {
   categoryExpenses,
   categoryHasBudget,
   categoryPlanAmount,
-  spentForCategory,
   spentFromLines,
   type BudgetExpense,
 } from './budget'
