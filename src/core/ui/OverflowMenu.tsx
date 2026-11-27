@@ -31,11 +31,10 @@ export function OverflowMenu({
 
   useLayoutEffect(() => {
     if (!open) return
-    const trigger = triggerRef.current
-    if (!trigger) return
-
     function update() {
-      const rect = trigger.getBoundingClientRect()
+      const node = triggerRef.current
+      if (!node) return
+      const rect = node.getBoundingClientRect()
       const right = Math.max(8, window.innerWidth - rect.right)
       if (placement === 'top') {
         setCoords({

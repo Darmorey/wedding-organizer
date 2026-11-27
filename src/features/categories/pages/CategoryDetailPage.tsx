@@ -56,15 +56,16 @@ export function CategoryDetailPage() {
   const done = (tasks ?? []).filter((task) => task.done).length
   const total = tasks?.length ?? 0
   const percent = total === 0 ? 0 : Math.round((done / total) * 100)
-  const boardMode = moodBoardMode(category.name)
+  const categoryName = category.name
+  const boardMode = moodBoardMode(categoryName)
   const showMoodBoard = boardMode !== 'none'
-  const placeKind = placeBoardKind(category.name)
-  const exampleTasks = examplesForCategory(category.name)
+  const placeKind = placeBoardKind(categoryName)
+  const exampleTasks = examplesForCategory(categoryName)
 
   function openAdd() {
     setAdding(true)
     setTaskTitle('')
-    setTaskDeadline(defaultDeadlineForCategory(category.name))
+    setTaskDeadline(defaultDeadlineForCategory(categoryName))
     requestAnimationFrame(() => addInputRef.current?.focus())
   }
 
@@ -237,7 +238,7 @@ export function CategoryDetailPage() {
                 for (const title of titles) {
                   if (existing.has(title.trim().toLowerCase())) continue
                   const phase =
-                    deadlinePhaseForTitle(title, category.name) ?? defaultDeadlineForCategory(category.name)
+                    deadlinePhaseForTitle(title, categoryName) ?? defaultDeadlineForCategory(categoryName)
                   await taskRepository.create(activeProjectId, categoryId, title, phase)
                   existing.add(title.trim().toLowerCase())
                 }
@@ -268,8 +269,8 @@ export function CategoryDetailPage() {
           onAddSubtask={async (parentId, title) => {
             const parent = (tasks ?? []).find((task) => task.id === parentId)
             const phase =
-              (parent ? deadlinePhaseOf(parent, category.name) : null) ??
-              defaultDeadlineForCategory(category.name)
+              (parent ? deadlinePhaseOf(parent, categoryName) : null) ??
+              defaultDeadlineForCategory(categoryName)
             await taskRepository.create(activeProjectId, categoryId, title, phase, parentId)
           }}
         />

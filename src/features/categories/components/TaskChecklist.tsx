@@ -81,7 +81,12 @@ export function TaskChecklist({
   }, [rootIds, draggingId, roots])
 
   const byId = useMemo(() => new Map(tasks.map((task) => [task.id, task])), [tasks])
-  const orderedRoots = order.map((id) => byId.get(id)).filter((task): task is Task => Boolean(task) && roots.some((root) => root.id === task.id))
+  const orderedRoots = order
+    .map((id) => byId.get(id))
+    .filter((task): task is Task => {
+      if (!task) return false
+      return roots.some((root) => root.id === task.id)
+    })
 
   useLayoutEffect(() => {
     for (const [id, el] of itemRefs.current) {
