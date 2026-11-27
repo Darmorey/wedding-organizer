@@ -116,6 +116,151 @@ export const moodRepository = {
     return item
   },
 
+  async addVenue(
+    projectId: string,
+    categoryId: string,
+    file: File | null,
+    fields: { place: string; budget: string; details: string; comment: string; url: string },
+  ): Promise<MoodItem> {
+    assertProjectId(projectId)
+    const now = nowIso()
+    const id = createId()
+    let storagePath = ''
+    let fileName = ''
+    let mimeType = ''
+    let sizeBytes = 0
+
+    if (file) {
+      const compressed = await compressImage(file)
+      storagePath = moodStoragePath(projectId, id)
+      await uploadMoodImage(storagePath, compressed.blob, compressed.mimeType)
+      fileName = compressed.fileName
+      mimeType = compressed.mimeType
+      sizeBytes = compressed.blob.size
+    }
+
+    const existing = await this.listByCategory(projectId, categoryId)
+    const sortOrder = existing.length === 0 ? 0 : Math.min(...existing.map((item) => item.sortOrder ?? 0)) - 1
+    const canvas = nextCanvasLayout(existing, 'image')
+    const url = fields.url.trim() ? normalizeUrl(fields.url) : ''
+    const item: MoodItem = {
+      id,
+      projectId,
+      categoryId,
+      kind: storagePath ? 'image' : 'link',
+      caption: fields.place.trim(),
+      url,
+      storagePath,
+      fileName,
+      mimeType,
+      sizeBytes,
+      uploadStatus: 'uploaded',
+      sortOrder,
+      canvas,
+      textStyle: defaultTextStyle(),
+      metadata: {
+        sortOrder,
+        moodKind: storagePath ? 'image' : 'link',
+        canvas,
+        placeCard: true,
+        budget: fields.budget.trim(),
+        details: fields.details.trim(),
+        comment: fields.comment.trim(),
+      },
+      createdAt: now,
+      updatedAt: now,
+      deletedAt: null,
+    }
+
+    await db.moodItems.put(item)
+    await enqueueSync(projectId, 'mood_items', item.id, 'upsert')
+    return item
+  },
+
+  async updateVenue(
+    projectId: string,
+    itemId: string,
+    file: File | null,
+    fields: { place: string; budget: string; details: string; comment: string; url: string },
+  ): Promise<void> {
+    assertProjectId(projectId)
+    const item = await db.moodItems.get(itemId)
+    if (!item || item.projectId !== projectId || item.deletedAt) return
+
+    const hydrated = hydrateMoodItem(item as MoodItem)
+    let storagePath = hydrated.storagePath
+    let fileName = hydrated.fileName
+    let mimeType = hydrated.mimeType
+    let sizeBytes = hydrated.sizeBytes
+    let kind = hydrated.kind
+
+    if (file) {
+      const compressed = await compressImage(file)
+      storagePath = hydrated.storagePath || moodStoragePath(projectId, itemId)
+      await uploadMoodImage(storagePath, compressed.blob, compressed.mimeType)
+      fileName = compressed.fileName
+      mimeType = compressed.mimeType
+      sizeBytes = compressed.blob.size
+      kind = 'image'
+    }
+
+    const url = fields.url.trim() ? normalizeUrl(fields.url) : ''
+    const latest = await db.moodItems.get(itemId)
+    if (!latest || latest.deletedAt) return
+
+    const updated: MoodItem = {
+      ...hydrated,
+      kind,
+      caption: fields.place.trim(),
+      url,
+      storagePath,
+      fileName,
+      mimeType,
+      sizeBytes,
+      metadata: {
+        ...(hydrated.metadata ?? {}),
+        moodKind: kind,
+        placeCard: true,
+        budget: fields.budget.trim(),
+        details: fields.details.trim(),
+        comment: fields.comment.trim(),
+      },
+      updatedAt: nowIso(),
+    }
+    updated.metadata = withCanvasMetadata(updated)
+
+    await db.moodItems.put(updated)
+    await enqueueSync(projectId, 'mood_items', itemId, 'upsert')
+  },
+
+  async chooseVenue(projectId: string, categoryId: string, itemId: string): Promise<void> {
+    assertProjectId(projectId)
+    const items = await this.listByCategory(projectId, categoryId)
+    const target = items.find((item) => item.id === itemId)
+    if (!target || !target.metadata?.placeCard) return
+
+    const currentlyChosen = target.metadata.chosen === true
+    const now = nowIso()
+
+    for (const item of items) {
+      if (!item.metadata?.placeCard) continue
+      const shouldChoose = !currentlyChosen && item.id === itemId
+      if ((item.metadata.chosen === true) === shouldChoose) continue
+
+      const updated: MoodItem = hydrateMoodItem({
+        ...item,
+        metadata: {
+          ...(item.metadata ?? {}),
+          chosen: shouldChoose,
+        },
+        updatedAt: now,
+      })
+      updated.metadata = withCanvasMetadata(updated)
+      await db.moodItems.put(updated)
+      await enqueueSync(projectId, 'mood_items', item.id, 'upsert')
+    }
+  },
+
   async reorder(projectId: string, categoryId: string, orderedIds: string[]): Promise<void> {
     assertProjectId(projectId)
     const items = await this.listByCategory(projectId, categoryId)
@@ -189,6 +334,8 @@ export const moodRepository = {
     } as MoodItem)
     updated.metadata = withCanvasMetadata(updated)
 
+    const latest = await db.moodItems.get(itemId)
+    if (!latest || latest.deletedAt) return
     await db.moodItems.put(updated)
     await enqueueSync(projectId, 'mood_items', itemId, 'upsert')
   },
@@ -206,6 +353,8 @@ export const moodRepository = {
     updated.textStyle = textStyle
     updated.metadata = withCanvasMetadata(updated)
 
+    const latest = await db.moodItems.get(itemId)
+    if (!latest || latest.deletedAt) return
     await db.moodItems.put(updated)
     await enqueueSync(projectId, 'mood_items', itemId, 'upsert')
   },
@@ -223,6 +372,8 @@ export const moodRepository = {
     updated.canvas = canvas
     updated.metadata = withCanvasMetadata(updated)
 
+    const latest = await db.moodItems.get(itemId)
+    if (!latest || latest.deletedAt) return
     await db.moodItems.put(updated)
     await enqueueSync(projectId, 'mood_items', itemId, 'upsert')
   },

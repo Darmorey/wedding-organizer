@@ -8,6 +8,7 @@ import {
   type PointerEvent as ReactPointerEvent,
 } from 'react'
 import type { Task } from '../../../core/types/entity'
+import { OverflowMenu, OverflowMenuItem } from '../../../core/ui/OverflowMenu'
 
 interface TaskChecklistProps {
   tasks: Task[]
@@ -243,24 +244,29 @@ export function TaskChecklist({ tasks, onToggle, onRemove, onRename, onReorder }
               {task.title}
             </button>
           )}
-          {editingId !== task.id ? (
-            <button
-              type="button"
-              aria-label="Изменить"
-              onClick={() => startEdit(task)}
-              className="shrink-0 rounded-lg px-1.5 py-1 text-[11px] font-medium text-accent-dark hover:bg-cream"
-            >
-              Изм.
-            </button>
-          ) : null}
-          <button
-            type="button"
-            aria-label="Удалить"
-            onClick={() => onRemove(task.id)}
-            className="shrink-0 rounded-lg px-1.5 py-1 text-sm text-muted hover:bg-red-50 hover:text-red-600"
-          >
-            🗑
-          </button>
+          <OverflowMenu ariaLabel="Действия" widthClass="w-36">
+            {(close) => (
+              <>
+                <OverflowMenuItem
+                  onClick={() => {
+                    close()
+                    startEdit(task)
+                  }}
+                >
+                  Изменить
+                </OverflowMenuItem>
+                <OverflowMenuItem
+                  danger
+                  onClick={() => {
+                    close()
+                    onRemove(task.id)
+                  }}
+                >
+                  Удалить
+                </OverflowMenuItem>
+              </>
+            )}
+          </OverflowMenu>
         </li>
       ))}
     </ul>

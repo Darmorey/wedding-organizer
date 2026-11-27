@@ -3,7 +3,7 @@ import { useLiveQuery } from 'dexie-react-hooks'
 import { db } from '../../../data/db/database'
 import { useAuth } from '../../auth/AuthProvider'
 import { categoryRepository } from '../../../data/repositories/categoryRepository'
-import { CategoryCard } from '../components/CategoryCard'
+import { CategoryList } from '../components/CategoryList'
 import { AddButton } from '../../../core/ui/AddButton'
 import { EmptyState } from '../../../core/ui/EmptyState'
 
@@ -78,7 +78,7 @@ export function CategoriesPage() {
               id="categoryIcon"
               name="categoryIcon"
               type="text"
-              placeholder="📋"
+              placeholder=""
               value={icon}
               onChange={(e) => setIcon(e.target.value)}
               aria-label="Иконка"
@@ -100,19 +100,27 @@ export function CategoriesPage() {
           description="Они появятся после синхронизации или добавьте свою первую категорию."
         />
       ) : (
-        <div className="space-y-4">
-          {list.map((category) => {
-            const stats = statsByCategory.get(category.id) ?? { done: 0, total: 0 }
-            return (
-              <CategoryCard
-                key={category.id}
-                category={category}
-                done={stats.done}
-                total={stats.total}
-              />
+        <CategoryList
+          categories={list}
+          statsByCategory={statsByCategory}
+          onReorder={(orderedIds) => {
+            if (!activeProjectId) return
+            categoryRepository.reorder(activeProjectId, orderedIds).catch(console.error)
+          }}
+          onUpdate={(categoryId, input) => {
+            if (!activeProjectId) return
+            categoryRepository.update(activeProjectId, categoryId, input).catch(console.error)
+          }}
+          onRemove={(categoryId) => {
+            if (!activeProjectId) return
+            const category = list.find((item) => item.id === categoryId)
+            const ok = window.confirm(
+              `Удалить «${category?.name ?? 'раздел'}»?\n\nВсе задачи этого раздела тоже будут удалены.`,
             )
-          })}
-        </div>
+            if (!ok) return
+            categoryRepository.remove(activeProjectId, categoryId).catch(console.error)
+          }}
+        />
       )}
     </div>
   )

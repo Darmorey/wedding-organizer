@@ -9,7 +9,9 @@ import { MoodBoard } from '../components/MoodBoard'
 import { CanvasMoodBoard } from '../components/CanvasMoodBoard'
 import { AddButton } from '../../../core/ui/AddButton'
 import { ProgressBar } from '../../../core/ui/ProgressBar'
-import { moodBoardMode } from '../../../core/config/moodboard'
+import { moodBoardMode, placeBoardKind } from '../../../core/config/moodboard'
+import { examplesForCategory } from '../../../core/config/taskExamples'
+import { TaskExamplesPanel } from '../components/TaskExamplesPanel'
 
 export function CategoryDetailPage() {
   const { categoryId = '' } = useParams()
@@ -19,6 +21,7 @@ export function CategoryDetailPage() {
   const [taskTitle, setTaskTitle] = useState('')
   const addInputRef = useRef<HTMLInputElement>(null)
   const [tab, setTab] = useState<'tasks' | 'mood'>('tasks')
+  const [examplesOpen, setExamplesOpen] = useState(false)
 
   const category = useLiveQuery(async () => {
     if (!activeProjectId || !categoryId) return undefined
@@ -47,6 +50,8 @@ export function CategoryDetailPage() {
   const percent = total === 0 ? 0 : Math.round((done / total) * 100)
   const boardMode = moodBoardMode(category.name)
   const showMoodBoard = boardMode !== 'none'
+  const placeKind = placeBoardKind(category.name)
+  const exampleTasks = examplesForCategory(category.name)
 
   function openAdd() {
     setAdding(true)
@@ -83,10 +88,14 @@ export function CategoryDetailPage() {
   return (
     <div className="space-y-3">
       <div>
-        <Link to="/categories" className="text-[11px] leading-none text-accent-dark hover:text-accent">
-          ← К категориям
-        </Link>
-        <div className="mt-1 flex items-center gap-2">
+        <div className="flex items-center gap-2">
+          <Link
+            to="/categories"
+            aria-label="К категориям"
+            className="shrink-0 text-2xl leading-none text-accent-dark hover:text-accent"
+          >
+            ←
+          </Link>
           <span className="text-lg leading-none">{category.icon}</span>
           <div className="min-w-0 flex-1">
             <div className="flex items-baseline justify-between gap-2">
@@ -130,10 +139,23 @@ export function CategoryDetailPage() {
       {showMoodBoard && tab === 'mood' && boardMode === 'canvas' ? (
         <CanvasMoodBoard projectId={activeProjectId} categoryId={categoryId} />
       ) : showMoodBoard && tab === 'mood' ? (
-        <MoodBoard projectId={activeProjectId} categoryId={categoryId} />
+        <MoodBoard
+          projectId={activeProjectId}
+          categoryId={categoryId}
+          variant={placeKind ?? 'media'}
+        />
       ) : (
       <div>
         <div className="mb-2 flex items-center justify-end gap-2">
+          {exampleTasks.length > 0 && !adding ? (
+            <button
+              type="button"
+              onClick={() => setExamplesOpen((open) => !open)}
+              className="mr-auto text-sm text-accent-dark hover:text-accent"
+            >
+              Пример задач
+            </button>
+          ) : null}
           {adding ? (
             <>
               <input
@@ -173,6 +195,26 @@ export function CategoryDetailPage() {
             />
           )}
         </div>
+        {examplesOpen && exampleTasks.length > 0 && !adding ? (
+          <TaskExamplesPanel
+            examples={exampleTasks}
+            existingTitles={(tasks ?? []).map((task) => task.title)}
+            disabled={submitting}
+            onAdd={async (titles) => {
+              setSubmitting(true)
+              try {
+                const existing = new Set((tasks ?? []).map((task) => task.title.trim().toLowerCase()))
+                for (const title of titles) {
+                  if (existing.has(title.trim().toLowerCase())) continue
+                  await taskRepository.create(activeProjectId, categoryId, title)
+                  existing.add(title.trim().toLowerCase())
+                }
+              } finally {
+                setSubmitting(false)
+              }
+            }}
+          />
+        ) : null}
         <TaskChecklist
           tasks={tasks ?? []}
           onToggle={(taskId) => {

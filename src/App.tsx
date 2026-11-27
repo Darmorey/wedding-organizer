@@ -6,6 +6,8 @@ import { ForgotPasswordPage } from './features/auth/pages/ForgotPasswordPage'
 import { ResetPasswordPage } from './features/auth/pages/ResetPasswordPage'
 import { OnboardingPage } from './features/auth/pages/OnboardingPage'
 import { HomePage } from './features/home/HomePage'
+import { BudgetPage } from './features/budget/BudgetPage'
+import { BudgetCategoryPage } from './features/budget/BudgetCategoryPage'
 import { CategoriesPage } from './features/categories/pages/CategoriesPage'
 import { CategoryDetailPage } from './features/categories/pages/CategoryDetailPage'
 import { GuestsPage } from './features/guests/pages/GuestsPage'
@@ -24,6 +26,8 @@ function App() {
             <Route element={<ProtectedRoute />}>
               <Route element={<AppShell />}>
                 <Route path="/" element={<HomePage />} />
+                <Route path="/budget" element={<BudgetPage />} />
+                <Route path="/budget/:categoryId" element={<BudgetCategoryPage />} />
                 <Route path="/categories" element={<CategoriesPage />} />
                 <Route path="/categories/:categoryId" element={<CategoryDetailPage />} />
                 <Route path="/guests" element={<GuestsPage />} />

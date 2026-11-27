@@ -21,16 +21,24 @@ interface CanvasMoodBoardProps {
   categoryId: string
 }
 
-const MIN_ZOOM = 0.4
-const MAX_ZOOM = 2.4
+const MIN_ZOOM = 0.25
+const MAX_ZOOM = 3.2
+const POINTER_SLOP_MOUSE = 3
+const POINTER_SLOP_TOUCH = 12
 
 export function CanvasMoodBoard({ projectId, categoryId }: CanvasMoodBoardProps) {
   const fileInputRef = useRef<HTMLInputElement>(null)
   const cameraInputRef = useRef<HTMLInputElement>(null)
   const viewportRef = useRef<HTMLDivElement>(null)
+  const boardRef = useRef<HTMLDivElement>(null)
   const panZoomRef = useRef({ x: 28, y: 36, zoom: 1 })
+  const pointersRef = useRef(new Map<number, { x: number; y: number }>())
+  const pinchRef = useRef<{ dist: number; midX: number; midY: number } | null>(null)
+  const panZoomRafRef = useRef(0)
+  const deletingIdsRef = useRef(new Set<string>())
   const gestureRef = useRef<
-    | { type: 'pan'; lastX: number; lastY: number }
+    | { type: 'pinch' }
+    | { type: 'pan'; lastX: number; lastY: number; originX: number; originY: number; started: boolean; slop: number }
     | {
         type: 'item'
         id: string
@@ -38,6 +46,10 @@ export function CanvasMoodBoard({ projectId, categoryId }: CanvasMoodBoardProps)
         corner?: ResizeHandle
         lastX: number
         lastY: number
+        originX: number
+        originY: number
+        started: boolean
+        slop: number
         alreadySelected: boolean
         selectionHandled: boolean
       }
@@ -120,19 +132,82 @@ export function CanvasMoodBoard({ projectId, categoryId }: CanvasMoodBoardProps)
       applyZoomAt(panZoomRef.current.zoom * factor, event.clientX, event.clientY)
     }
     node.addEventListener('wheel', onWheel, { passive: false })
+    const preventScroll = (event: TouchEvent) => {
+      if (event.touches.length >= 2 || gestureRef.current) event.preventDefault()
+    }
+    node.addEventListener('touchmove', preventScroll, { passive: false })
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape') clearSelection()
     }
     window.addEventListener('keydown', onKeyDown)
     return () => {
       node.removeEventListener('wheel', onWheel)
+      node.removeEventListener('touchmove', preventScroll)
       window.removeEventListener('keydown', onKeyDown)
     }
   }, [])
 
+  function syncBoardTransform() {
+    const node = boardRef.current
+    if (!node) return
+    const { x, y, zoom } = panZoomRef.current
+    node.style.transform = `translate(${x}px, ${y}px) scale(${zoom})`
+  }
+
   function commitPanZoom() {
-    setPan({ x: panZoomRef.current.x, y: panZoomRef.current.y })
-    setZoom(panZoomRef.current.zoom)
+    syncBoardTransform()
+    if (panZoomRafRef.current) return
+    panZoomRafRef.current = requestAnimationFrame(() => {
+      panZoomRafRef.current = 0
+      setPan({ x: panZoomRef.current.x, y: panZoomRef.current.y })
+      setZoom(panZoomRef.current.zoom)
+    })
+  }
+
+  function pointerSlop(pointerType: string) {
+    return pointerType === 'mouse' ? POINTER_SLOP_MOUSE : POINTER_SLOP_TOUCH
+  }
+
+  function rememberPointer(pointerId: number, x: number, y: number) {
+    pointersRef.current.set(pointerId, { x, y })
+  }
+
+  function forgetPointer(pointerId: number) {
+    pointersRef.current.delete(pointerId)
+    if (pointersRef.current.size < 2) pinchRef.current = null
+  }
+
+  function pinchMetrics() {
+    const points = [...pointersRef.current.values()]
+    if (points.length < 2) return null
+    const [a, b] = points
+    return {
+      dist: Math.hypot(a.x - b.x, a.y - b.y),
+      midX: (a.x + b.x) / 2,
+      midY: (a.y + b.y) / 2,
+    }
+  }
+
+  function beginPinch() {
+    clearLongPressTimer()
+    movedRef.current = true
+    gestureRef.current = { type: 'pinch' }
+    pinchRef.current = pinchMetrics()
+  }
+
+  function applyPinchMove() {
+    const next = pinchMetrics()
+    const prev = pinchRef.current
+    if (!next) return
+    if (prev && prev.dist > 8) {
+      panZoomRef.current = {
+        ...panZoomRef.current,
+        x: panZoomRef.current.x + (next.midX - prev.midX),
+        y: panZoomRef.current.y + (next.midY - prev.midY),
+      }
+      applyZoomAt(panZoomRef.current.zoom * (next.dist / prev.dist), next.midX, next.midY)
+    }
+    pinchRef.current = next
   }
 
   function layoutOf(item: MoodItem): MoodCanvasLayout {
@@ -162,7 +237,22 @@ export function CanvasMoodBoard({ projectId, categoryId }: CanvasMoodBoardProps)
   }
 
   function persistCanvas(itemId: string, canvas: MoodCanvasLayout) {
+    if (deletingIdsRef.current.has(itemId)) return
     moodRepository.updateCanvas(projectId, itemId, canvas).catch(console.error)
+  }
+
+  function removeItems(ids: string[]) {
+    for (const id of ids) deletingIdsRef.current.add(id)
+    setEditingId(null)
+    setSelectedIds((current) => current.filter((id) => !ids.includes(id)))
+    multiSelectModeRef.current = false
+    setCropMode(false)
+    setDrafts((drafts) => {
+      const next = { ...drafts }
+      for (const id of ids) delete next[id]
+      return next
+    })
+    Promise.all(ids.map((id) => moodRepository.remove(projectId, id))).catch(console.error)
   }
 
   function bringToFront(item: MoodItem) {
@@ -177,6 +267,12 @@ export function CanvasMoodBoard({ projectId, categoryId }: CanvasMoodBoardProps)
 
   function onViewportPointerDown(event: ReactPointerEvent<HTMLDivElement>) {
     if (event.button !== 0) return
+    rememberPointer(event.pointerId, event.clientX, event.clientY)
+    viewportRef.current?.setPointerCapture(event.pointerId)
+    if (pointersRef.current.size >= 2) {
+      beginPinch()
+      return
+    }
     if (event.target !== event.currentTarget && !(event.target as HTMLElement).dataset?.board) return
     if (cropMode && primaryId) {
       const canvas = draftsRef.current[primaryId]
@@ -185,18 +281,38 @@ export function CanvasMoodBoard({ projectId, categoryId }: CanvasMoodBoardProps)
     clearSelection()
     setAttachOpen(false)
     movedRef.current = false
-    gestureRef.current = { type: 'pan', lastX: event.clientX, lastY: event.clientY }
-    event.currentTarget.setPointerCapture(event.pointerId)
+    const slop = pointerSlop(event.pointerType)
+    gestureRef.current = {
+      type: 'pan',
+      lastX: event.clientX,
+      lastY: event.clientY,
+      originX: event.clientX,
+      originY: event.clientY,
+      started: false,
+      slop,
+    }
   }
 
   function onViewportPointerMove(event: ReactPointerEvent<HTMLDivElement>) {
+    if (pointersRef.current.has(event.pointerId)) {
+      rememberPointer(event.pointerId, event.clientX, event.clientY)
+    }
+    if (pointersRef.current.size >= 2) {
+      if (gestureRef.current?.type !== 'pinch') beginPinch()
+      applyPinchMove()
+      return
+    }
+
     const gesture = gestureRef.current
-    if (!gesture) return
-    const dx = event.clientX - gesture.lastX
-    const dy = event.clientY - gesture.lastY
-    if (Math.hypot(dx, dy) > 2) {
+    if (!gesture || gesture.type === 'pinch') return
+    if (!gesture.started) {
+      const distance = Math.hypot(event.clientX - gesture.originX, event.clientY - gesture.originY)
+      if (distance < gesture.slop) return
+      gesture.started = true
       movedRef.current = true
       clearLongPressTimer()
+      gesture.lastX = event.clientX
+      gesture.lastY = event.clientY
       if (
         gesture.type === 'item' &&
         !multiSelectModeRef.current &&
@@ -204,7 +320,11 @@ export function CanvasMoodBoard({ projectId, categoryId }: CanvasMoodBoardProps)
       ) {
         setSelectedIds([gesture.id])
       }
+      return
     }
+
+    const dx = event.clientX - gesture.lastX
+    const dy = event.clientY - gesture.lastY
 
     if (gesture.type === 'pan') {
       panZoomRef.current = {
@@ -269,8 +389,26 @@ export function CanvasMoodBoard({ projectId, categoryId }: CanvasMoodBoardProps)
     setDrafts(draftsRef.current)
   }
 
-  function onViewportPointerUp() {
+  function onViewportPointerUp(event?: ReactPointerEvent<HTMLDivElement>) {
+    if (event) forgetPointer(event.pointerId)
     clearLongPressTimer()
+    if (pointersRef.current.size >= 2) {
+      pinchRef.current = pinchMetrics()
+      return
+    }
+    if (pointersRef.current.size === 1 && gestureRef.current?.type === 'pinch') {
+      const remaining = [...pointersRef.current.values()][0]
+      gestureRef.current = {
+        type: 'pan',
+        lastX: remaining.x,
+        lastY: remaining.y,
+        originX: remaining.x,
+        originY: remaining.y,
+        started: true,
+        slop: POINTER_SLOP_TOUCH,
+      }
+      return
+    }
     const gesture = gestureRef.current
     gestureRef.current = null
     if (gesture?.type !== 'item') return
@@ -306,6 +444,12 @@ export function CanvasMoodBoard({ projectId, categoryId }: CanvasMoodBoardProps)
   ) {
     event.stopPropagation()
     if (event.button !== 0) return
+    rememberPointer(event.pointerId, event.clientX, event.clientY)
+    viewportRef.current?.setPointerCapture(event.pointerId)
+    if (pointersRef.current.size >= 2) {
+      beginPinch()
+      return
+    }
     movedRef.current = false
     longPressFiredRef.current = false
     clearLongPressTimer()
@@ -346,6 +490,7 @@ export function CanvasMoodBoard({ projectId, categoryId }: CanvasMoodBoardProps)
     }
 
     bringToFront(item)
+    const slop = pointerSlop(event.pointerType)
     gestureRef.current = {
       type: 'item',
       id: item.id,
@@ -353,10 +498,13 @@ export function CanvasMoodBoard({ projectId, categoryId }: CanvasMoodBoardProps)
       corner,
       lastX: event.clientX,
       lastY: event.clientY,
+      originX: event.clientX,
+      originY: event.clientY,
+      started: mode === 'resize' || mode === 'rotate' || mode === 'crop',
+      slop,
       alreadySelected,
       selectionHandled,
     }
-    viewportRef.current?.setPointerCapture(event.pointerId)
   }
 
   async function handleFiles(files: FileList | null) {
@@ -454,13 +602,15 @@ export function CanvasMoodBoard({ projectId, categoryId }: CanvasMoodBoardProps)
 
       <div
         ref={viewportRef}
-        className="relative h-[calc(100dvh-13.5rem)] min-h-96 touch-none overflow-hidden bg-[#eef1f4]"
+        className="relative h-[calc(100dvh-13.5rem)] min-h-96 touch-none overflow-hidden overscroll-none bg-[#eef1f4]"
+        style={{ touchAction: 'none' }}
         onPointerDown={onViewportPointerDown}
         onPointerMove={onViewportPointerMove}
         onPointerUp={onViewportPointerUp}
         onPointerCancel={onViewportPointerUp}
       >
         <div
+          ref={boardRef}
           data-board="true"
           className="absolute left-0 top-0 origin-top-left"
           style={{
@@ -487,6 +637,7 @@ export function CanvasMoodBoard({ projectId, categoryId }: CanvasMoodBoardProps)
               onResizePointerDown={(event, handle) => startItemGesture(event, item, 'resize', handle)}
               onSelect={() => {}}
               onCaption={(value) => {
+                if (deletingIdsRef.current.has(item.id)) return
                 moodRepository.updateCaption(projectId, item.id, value).catch(console.error)
               }}
               onFrameSize={(width, height) => {
@@ -554,14 +705,7 @@ export function CanvasMoodBoard({ projectId, categoryId }: CanvasMoodBoardProps)
                 .catch(console.error)
             }}
             onDelete={() => {
-              const ids = [...selectedIds]
-              clearSelection()
-              setDrafts((drafts) => {
-                const next = { ...drafts }
-                for (const id of ids) delete next[id]
-                return next
-              })
-              Promise.all(ids.map((id) => moodRepository.remove(projectId, id))).catch(console.error)
+              removeItems([...selectedIds])
             }}
             onResetCrop={() => {}}
             onResetRotation={() => {
@@ -602,14 +746,7 @@ export function CanvasMoodBoard({ projectId, categoryId }: CanvasMoodBoardProps)
               }).catch(console.error)
             }}
             onDelete={() => {
-              const id = selected.id
-              clearSelection()
-              setDrafts((drafts) => {
-                const next = { ...drafts }
-                delete next[id]
-                return next
-              })
-              moodRepository.remove(projectId, id).catch(console.error)
+              removeItems([selected.id])
             }}
             onResetCrop={() => {
               const current = layoutOf(selected)
@@ -755,18 +892,18 @@ function TextFormatTools({
         type="button"
         aria-label="Размер текста"
         className="min-w-7 text-center text-[16px] font-medium text-ink"
-        onClick={() => onChange({ ...style, size: sizes[(sizes.indexOf(style.size) + 1) % sizes.length] })}
+        onPointerDown={pressAction(() => onChange({ ...style, size: sizes[(sizes.indexOf(style.size) + 1) % sizes.length] }))}
       >
         Aa
       </button>
       <div className="flex items-end gap-0.5 text-[15px] text-ink">
-        <button type="button" aria-label="Жирный" className={style.bold ? 'font-bold' : 'font-semibold opacity-50'} onClick={() => onChange({ ...style, bold: !style.bold })}>
+        <button type="button" aria-label="Жирный" className={style.bold ? 'font-bold' : 'font-semibold opacity-50'} onPointerDown={pressAction(() => onChange({ ...style, bold: !style.bold }))}>
           B
         </button>
-        <button type="button" aria-label="Курсив" className={style.italic ? 'italic font-medium' : 'italic opacity-50'} onClick={() => onChange({ ...style, italic: !style.italic })}>
+        <button type="button" aria-label="Курсив" className={style.italic ? 'italic font-medium' : 'italic opacity-50'} onPointerDown={pressAction(() => onChange({ ...style, italic: !style.italic }))}>
           I
         </button>
-        <button type="button" aria-label="Подчёркнутый" className={style.underline ? 'underline font-medium' : 'underline opacity-50'} onClick={() => onChange({ ...style, underline: !style.underline })}>
+        <button type="button" aria-label="Подчёркнутый" className={style.underline ? 'underline font-medium' : 'underline opacity-50'} onPointerDown={pressAction(() => onChange({ ...style, underline: !style.underline }))}>
           U
         </button>
       </div>
@@ -774,7 +911,7 @@ function TextFormatTools({
         type="button"
         aria-label="Выравнивание"
         className="text-ink"
-        onClick={() => onChange({ ...style, align: aligns[(aligns.indexOf(style.align) + 1) % aligns.length] })}
+        onPointerDown={pressAction(() => onChange({ ...style, align: aligns[(aligns.indexOf(style.align) + 1) % aligns.length] }))}
       >
         <IconAlign />
       </button>
@@ -782,7 +919,7 @@ function TextFormatTools({
         type="button"
         aria-label="Список"
         className={style.list ? 'text-accent' : 'text-ink'}
-        onClick={() => onChange({ ...style, list: !style.list })}
+        onPointerDown={pressAction(() => onChange({ ...style, list: !style.list }))}
       >
         <IconList />
       </button>
@@ -930,6 +1067,19 @@ function formatNoteText(text: string, list: boolean): string {
     .split('\n')
     .map((line) => (line.trim() ? `• ${line.replace(/^•\s*/, '')}` : line))
     .join('\n')
+}
+
+function stripListMarkers(text: string): string {
+  return text.replace(/^•\s*/gm, '')
+}
+
+function pressAction(handler: () => void) {
+  return (event: ReactPointerEvent<HTMLElement>) => {
+    if (event.button !== 0) return
+    event.stopPropagation()
+    event.preventDefault()
+    handler()
+  }
 }
 
 function CanvasCreateBar({
@@ -1085,7 +1235,11 @@ function CanvasItemToolbar({
     <div
       className="absolute inset-x-4 bottom-3 z-30 flex justify-center"
       onPointerDown={(event) => event.stopPropagation()}
-      onMouseDown={(event) => event.preventDefault()}
+      onMouseDown={(event) => {
+        const target = event.target as HTMLElement
+        if (target.closest('button, input, label, a')) return
+        event.preventDefault()
+      }}
     >
       <div className="flex max-w-full flex-wrap items-center justify-center gap-0.5 rounded-full bg-white px-2 py-1.5 shadow-[0_8px_24px_rgb(0_0_0_/_0.12)]">
         {extra}
@@ -1158,7 +1312,7 @@ function ToolbarIconButton({
     <button
       type="button"
       aria-label={label}
-      onClick={onClick}
+      onPointerDown={pressAction(onClick)}
       className={[
         'flex size-9 items-center justify-center rounded-full',
         danger ? 'text-red-500 hover:bg-red-50' : active ? 'bg-cream text-ink' : 'text-ink hover:bg-cream',
@@ -1365,11 +1519,11 @@ function CanvasCard({
               noteRef.current = node
             }}
             autoFocus
-            value={note}
+            value={formatNoteText(note, textStyle.list)}
             placeholder="Текст"
             onPointerDown={(event) => event.stopPropagation()}
             onChange={(event) => {
-              const value = event.target.value
+              const value = stripListMarkers(event.target.value)
               setNote(value)
               noteValueRef.current = value
             }}

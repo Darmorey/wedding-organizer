@@ -1,9 +1,8 @@
-import { Link } from 'react-router-dom'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { useAuth } from '../auth/AuthProvider'
 import { ProgressBar } from '../../core/ui/ProgressBar'
 import { db } from '../../data/db/database'
-import { categoryRepository } from '../../data/repositories/categoryRepository'
+import { HomeBudgetCard } from './HomeBudgetCard'
 
 export function HomePage() {
   const { activeProjectId } = useAuth()
@@ -16,11 +15,6 @@ export function HomePage() {
       total: active.length,
       done: active.filter((task) => task.done).length,
     }
-  }, [activeProjectId])
-
-  const categories = useLiveQuery(async () => {
-    if (!activeProjectId) return []
-    return categoryRepository.listByProject(activeProjectId)
   }, [activeProjectId])
 
   const percent =
@@ -46,27 +40,7 @@ export function HomePage() {
         </p>
       </div>
 
-      <div>
-        <div className="mb-3 flex items-center justify-between">
-          <h2 className="text-lg font-semibold text-accent-dark">Категории</h2>
-          <Link to="/categories" className="text-sm text-accent-dark hover:text-accent">
-            Все →
-          </Link>
-        </div>
-        <div className="space-y-2">
-          {(categories ?? []).map((category) => (
-            <Link
-              key={category.id}
-              to={`/categories/${category.id}`}
-              className="flex items-center gap-3 rounded-xl border border-cream-dark bg-white px-4 py-3 hover:bg-cream/50"
-            >
-              <span className="text-xl">{category.icon}</span>
-              <span className="font-medium text-ink">{category.name}</span>
-            </Link>
-          ))}
-        </div>
-      </div>
-
+      {activeProjectId ? <HomeBudgetCard projectId={activeProjectId} /> : null}
     </div>
   )
 }
